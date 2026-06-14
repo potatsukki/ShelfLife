@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.*
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -134,6 +135,22 @@ class ShelfLifeViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun signInWithGoogleIdToken(idToken: String?) {
+        val auth = firebaseAuth ?: return setAuthSetupError()
+        if (idToken.isNullOrBlank()) {
+            setAuthError("Google sign-in did not return a valid token. Try again.")
+            return
+        }
+        _authUiState.value = _authUiState.value.copy(isLoading = true, errorMessage = null)
+        viewModelScope.launch {
+            val credential = GoogleAuthProvider.getCredential(idToken, null)
+            runCatching { auth.signInWithCredential(credential).awaitTask() }
+                .onSuccess { navigateTo("dashboard") }
+                .onFailure { setAuthError(it.localizedMessage ?: "Unable to sign in with Google.") }
+            _authUiState.value = _authUiState.value.copy(isLoading = false)
+        }
+    }
+
     fun signOut() {
         firebaseAuth?.signOut()
         _suggestedRecipes.value = emptyList()
@@ -144,6 +161,10 @@ class ShelfLifeViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun clearAuthError() {
         _authUiState.value = _authUiState.value.copy(errorMessage = null)
+    }
+
+    fun reportAuthError(message: String) {
+        setAuthError(message)
     }
 
     private fun validateCredentials(email: String, password: String): Boolean {

@@ -271,7 +271,7 @@ fun OnboardingScreenTwo(viewModel: ShelfLifeViewModel) {
                     .height(240.dp),
                 contentAlignment = Alignment.Center
             ) {
-                // Background Card 1: Spinach (Expiring Today)
+                // Background Card 1: Expiring alert
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     shape = RoundedCornerShape(16.dp),
@@ -296,14 +296,14 @@ fun OnboardingScreenTwo(viewModel: ShelfLifeViewModel) {
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Spinach", style = MaterialTheme.typography.labelLarge)
+                            Text("Expiring item", style = MaterialTheme.typography.labelLarge)
                             Text("Expires Today", color = SoftCoralError, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                         }
                         Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = SoftCoralError)
                     }
                 }
 
-                // Background Card 3: Eggs (Expiring Soon)
+                // Background Card 3: Soon alert
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     shape = RoundedCornerShape(16.dp),
@@ -328,14 +328,14 @@ fun OnboardingScreenTwo(viewModel: ShelfLifeViewModel) {
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Eggs", style = MaterialTheme.typography.labelLarge)
+                            Text("Expiring soon", style = MaterialTheme.typography.labelLarge)
                             Text("Expiring Soon (2 days)", color = OnPeachContainer, style = MaterialTheme.typography.bodySmall)
                         }
                         Icon(imageVector = Icons.Default.AccessTime, contentDescription = null, tint = OnPeachContainer)
                     }
                 }
 
-                // Foreground Card 2: Milk (Fresh)
+                // Foreground Card 2: Fresh item
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     shape = RoundedCornerShape(16.dp),
@@ -359,7 +359,7 @@ fun OnboardingScreenTwo(viewModel: ShelfLifeViewModel) {
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Milk", style = MaterialTheme.typography.labelLarge)
+                            Text("Fresh item", style = MaterialTheme.typography.labelLarge)
                             Text("Fresh (5 days left)", color = SageGreen, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                         }
                         Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = SageGreen)
@@ -489,7 +489,7 @@ fun OnboardingScreenThree(viewModel: ShelfLifeViewModel) {
                         Spacer(modifier = Modifier.height(12.dp))
 
                         Text(
-                            text = "Chicken Stir Fry",
+                            text = "Pantry-based recipe",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
@@ -501,7 +501,7 @@ fun OnboardingScreenThree(viewModel: ShelfLifeViewModel) {
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(imageVector = Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(16.dp), tint = SoftGrayText)
-                            Text("20 mins prep", style = MaterialTheme.typography.bodySmall, color = SoftGrayText)
+                            Text("Generated from your pantry", style = MaterialTheme.typography.bodySmall, color = SoftGrayText)
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -512,7 +512,7 @@ fun OnboardingScreenThree(viewModel: ShelfLifeViewModel) {
                                 .background(PeachContainer)
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
-                            Text("Uses 2 expiring items", style = MaterialTheme.typography.labelSmall, color = OnPeachContainer)
+                            Text("Uses items you already track", style = MaterialTheme.typography.labelSmall, color = OnPeachContainer)
                         }
                     }
 

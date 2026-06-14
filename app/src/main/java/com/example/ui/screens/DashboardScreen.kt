@@ -70,11 +70,13 @@ fun DashboardScreen(viewModel: ShelfLifeViewModel) {
         }
 
         // Expiration Warning alert card
-        val expiringSpinach = remember(ingredients) {
-            ingredients.firstOrNull { it.name.contains("spinach", ignoreCase = true) }
+        val urgentExpiringItem = remember(ingredients) {
+            ingredients
+                .filter { viewModel.getDaysExpiry(it.expirationDate) in 0..1 }
+                .minByOrNull { viewModel.getDaysExpiry(it.expirationDate) }
         }
 
-        if (expiringSpinach != null && viewModel.getDaysExpiry(expiringSpinach.expirationDate) <= 1) {
+        if (urgentExpiringItem != null) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 shape = RoundedCornerShape(24.dp),
@@ -94,7 +96,7 @@ fun DashboardScreen(viewModel: ShelfLifeViewModel) {
                         modifier = Modifier.size(24.dp)
                     )
                     Text(
-                        text = "Your spinach is expiring today. Consider using it in a salad or smoothie.",
+                        text = "${urgentExpiringItem.name} expires ${if (viewModel.getDaysExpiry(urgentExpiringItem.expirationDate) == 0) "today" else "tomorrow"}. Use it soon or mark it used if it is already gone.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )

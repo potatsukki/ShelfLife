@@ -1,29 +1,74 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.EaseInOutSine
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.example.ui.theme.*
+import com.example.data.Ingredient
+import com.example.ui.theme.SageGreen
+import com.example.ui.theme.SoftCoralError
+import com.example.ui.theme.SoftCoralErrorContainer
+import com.example.ui.theme.SoftGrayText
+import com.example.ui.theme.isDark
 import com.example.ui.viewmodel.ShelfLifeViewModel
 
 @Composable
@@ -31,306 +76,396 @@ fun ScannerScreen(
     viewModel: ShelfLifeViewModel,
     onNavigateToAddManual: () -> Unit
 ) {
-    val isDark = MaterialTheme.colorScheme.isDark
     val context = LocalContext.current
-    val scannerState by viewModel.scannerState.collectAsState()
-
-    // Moving laser line animation
-    val infiniteTransition = rememberInfiniteTransition(label = "laser")
-    val laserOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 240f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "laser_y"
-    )
+    val isDark = MaterialTheme.colorScheme.isDark
+    val scannerUiState by viewModel.scannerUiState.collectAsState()
+    var manualBarcode by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(bottom = 80.dp), // navbar offset
-        horizontalAlignment = Alignment.CenterHorizontally
+            .imePadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Top instruction header
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                text = "Barcode Scanner",
-                style = MaterialTheme.typography.titleLarge,
+                text = "Scan product",
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Point camera at the item's barcode to scan and log it.",
+                text = "Use the camera for packaged items, or enter a barcode manually when scanning is not available.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText,
-                textAlign = TextAlign.Center
+                color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText
             )
         }
 
-        // Viewfinder center Box
+        ScannerLaunchPanel(
+            isLoading = scannerUiState.isLoading,
+            onScan = { viewModel.scanRealBarcode(context) }
+        )
+
+        scannerUiState.pendingIngredient?.let { ingredient ->
+            ProductResultCard(
+                ingredient = ingredient,
+                barcode = scannerUiState.barcode,
+                onAdd = { viewModel.confirmScannedIngredient() },
+                onScanAgain = { viewModel.resetScanner() }
+            )
+        }
+
+        if (scannerUiState.message != null && scannerUiState.pendingIngredient == null && !scannerUiState.isLoading) {
+            ScanMessageCard(
+                message = scannerUiState.message.orEmpty(),
+                isError = scannerUiState.isError,
+                onClear = { viewModel.resetScanner() }
+            )
+        }
+
+        ManualBarcodeCard(
+            barcode = manualBarcode,
+            isLoading = scannerUiState.isLoading,
+            onBarcodeChange = { manualBarcode = it },
+            onLookup = { viewModel.lookupBarcode(manualBarcode) }
+        )
+
+        OutlinedButton(
+            onClick = onNavigateToAddManual,
+            shape = RoundedCornerShape(18.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+        ) {
+            Icon(imageVector = Icons.Default.Add, contentDescription = null)
+            Spacer(modifier = Modifier.size(8.dp))
+            Text("Add ingredient manually", fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun ScannerLaunchPanel(
+    isLoading: Boolean,
+    onScan: () -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "scanner_line")
+    val lineOffset by infiniteTransition.animateFloat(
+        initialValue = -86f,
+        targetValue = 86f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scanner_line_offset"
+    )
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1F241F)),
+        shape = RoundedCornerShape(28.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(300.dp)
+            .clickable(enabled = !isLoading, onClick = onScan)
+    ) {
         Box(
             modifier = Modifier
-                .size(280.dp)
-                .clip(RoundedCornerShape(32.dp))
-                .background(Color.Black.copy(alpha = 0.85f))
-                .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(32.dp))
-                .clickable {
-                    viewModel.scanRealBarcode(context)
-                },
+                .fillMaxSize()
+                .padding(22.dp),
             contentAlignment = Alignment.Center
         ) {
-            // Simulated camera scanner blurry feedback backdrop
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(24.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.QrCodeScanner,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.4f),
-                    modifier = Modifier.size(96.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = if (scannerState == "scanning") "Scanning barcode..." else "Camera View Finder",
-                    color = Color.White.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-
-            // Interactive moving laser line
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.85f)
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(22.dp))
+                    .border(2.dp, SageGreen, RoundedCornerShape(22.dp))
+                    .background(Color.Black.copy(alpha = 0.22f))
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
                     .height(3.dp)
-                    .offset(y = (-110).dp + laserOffset.dp)
+                    .offset(y = lineOffset.dp)
                     .background(
                         Brush.horizontalGradient(
-                            listOf(
-                                Color.Transparent,
-                                if (scannerState == "scanning") Color.Yellow else MaterialTheme.colorScheme.primaryContainer,
-                                Color.Transparent
-                            )
+                            listOf(Color.Transparent, SageGreen, Color.Transparent)
                         )
                     )
             )
 
-            // Success overlay HUD
-            androidx.compose.animation.AnimatedVisibility(
-                visible = scannerState != null && scannerState != "scanning",
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f))
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(SageGreen),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(imageVector = Icons.Default.Check, contentDescription = "Success", tint = Color.White, modifier = Modifier.size(32.dp))
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = scannerState ?: "",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isDark) MaterialTheme.colorScheme.onPrimaryContainer else OnMintContainer,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(
-                            onClick = { viewModel.resetScanner() },
-                            colors = ButtonDefaults.buttonColors(containerColor = SageGreen),
-                            shape = CircleShape
-                        ) {
-                            Text("Scan Another", color = Color.White)
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        var customBarcode by remember { mutableStateOf("") }
-
-        if (scannerState == null || scannerState == "scanning") {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.padding(horizontal = 24.dp)
             ) {
-                // Outlined Barcode Entry
-                OutlinedTextField(
-                    value = customBarcode,
-                    onValueChange = { customBarcode = it },
-                    placeholder = { Text("Or paste real barcode... (e.g. 5449000000996)", fontSize = 12.sp) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                        focusedContainerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White,
-                        unfocusedContainerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White
-                    ),
-                    shape = RoundedCornerShape(20.dp),
-                    modifier = Modifier.fillMaxWidth(0.9f),
-                    trailingIcon = {
-                        if (customBarcode.isNotBlank()) {
-                            IconButton(onClick = { viewModel.simulateScan(customBarcode) }) {
-                                Icon(imageVector = Icons.Default.Search, contentDescription = "Lookup", tint = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Primary real-camera scanner button
-                Button(
-                    onClick = { viewModel.scanRealBarcode(context) },
-                    enabled = scannerState != "scanning",
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .fillMaxWidth(0.8f)
-                        .height(48.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (scannerState == "scanning") {
-                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                            Text("Querying Database...", color = Color.White, fontSize = 14.sp)
-                        } else {
-                            Icon(imageVector = Icons.Default.PhotoCamera, contentDescription = null, tint = Color.White)
-                            Text("Open Scanner Camera", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Secondary quick-simulator button
-                OutlinedButton(
-                    onClick = { viewModel.simulateScan(customBarcode.ifBlank { null }) },
-                    enabled = scannerState != "scanning",
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .fillMaxWidth(0.8f)
-                        .height(42.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(imageVector = Icons.Default.FlashOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Text(if (customBarcode.isBlank()) "Quick Simulation Demo" else "Lookup Typed Barcode", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Presets Shelf
-                Text(
-                    text = "Live Test Presets (Open Food Facts & OpenRouter)",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                // Row of beautiful capsules
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    val presets = listOf(
-                        "Nutella" to "3017611154000",
-                        "Coca Cola" to "5449000000996",
-                        "Spaghetti" to "0737628005076"
+                if (isLoading) {
+                    CircularProgressIndicator(color = SageGreen, modifier = Modifier.size(44.dp))
+                    Text(
+                        text = "Looking up product...",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
                     )
-                    presets.forEach { (name, code) ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White)
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                                .clickable {
-                                    customBarcode = code
-                                    viewModel.simulateScan(code)
-                                }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(name, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        }
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.QrCodeScanner,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(64.dp)
+                    )
+                    Text(
+                        text = "Open camera scanner",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "Center the barcode in the camera view. ShelfLife will identify it before adding anything.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.72f),
+                        textAlign = TextAlign.Center
+                    )
+                    Button(
+                        onClick = onScan,
+                        colors = ButtonDefaults.buttonColors(containerColor = SageGreen),
+                        shape = CircleShape
+                    ) {
+                        Icon(imageVector = Icons.Default.PhotoCamera, contentDescription = null)
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Text("Scan barcode", fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
+    }
+}
 
-        Spacer(modifier = Modifier.weight(1f))
-
-        // Manual Fallback Entry Section
-        val isDark = MaterialTheme.colorScheme.isDark
-        val entryCardBg = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White
-
-        Card(
-            colors = CardDefaults.cardColors(containerColor = entryCardBg),
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 20.dp)
+@Composable
+private fun ProductResultCard(
+    ingredient: Ingredient,
+    barcode: String?,
+    onAdd: () -> Unit,
+    onScanAgain: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        shape = RoundedCornerShape(22.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = SageGreen,
+                    modifier = Modifier.size(34.dp)
+                )
+                Column {
                     Text(
-                        text = "Don't have a barcode?",
+                        text = "Product found",
                         style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Add details manually instead.",
+                        text = barcode ?: "Scanned barcode",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
                     )
                 }
+            }
 
+            Text(
+                text = ingredient.name,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Bold
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ProductChip(Icons.Default.LocalOffer, ingredient.category)
+                ProductChip(Icons.Default.Inventory2, "${ingredient.quantity} ${ingredient.unit}")
+            }
+            ProductChip(Icons.Default.Inventory2, "${ingredient.location} until ${ingredient.expirationDate}")
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
-                    onClick = onNavigateToAddManual,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                    shape = CircleShape
+                    onClick = onAdd,
+                    colors = ButtonDefaults.buttonColors(containerColor = SageGreen),
+                    shape = CircleShape,
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Text("Add Manually", color = if (isDark) MaterialTheme.colorScheme.onPrimaryContainer else OnMintContainer, style = MaterialTheme.typography.labelSmall)
+                    Text("Add to pantry", fontWeight = FontWeight.Bold)
+                }
+                OutlinedButton(
+                    onClick = onScanAgain,
+                    shape = CircleShape,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null)
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text("Scan again")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProductChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f))
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(16.dp)
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun ScanMessageCard(
+    message: String,
+    isError: Boolean,
+    onClear: () -> Unit
+) {
+    val container = if (isError) SoftCoralErrorContainer else MaterialTheme.colorScheme.primaryContainer
+    val content = if (isError) SoftCoralError else MaterialTheme.colorScheme.onPrimaryContainer
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = container),
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(
+                imageVector = if (isError) Icons.Default.Search else Icons.Default.CheckCircle,
+                contentDescription = null,
+                tint = content,
+                modifier = Modifier.size(22.dp)
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = content,
+                modifier = Modifier.weight(1f)
+            )
+            OutlinedButton(onClick = onClear, shape = CircleShape) {
+                Text("Clear")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ManualBarcodeCard(
+    barcode: String,
+    isLoading: Boolean,
+    onBarcodeChange: (String) -> Unit,
+    onLookup: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(22.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Keyboard,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Column {
+                    Text(
+                        text = "Enter barcode manually",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Useful for emulators, damaged labels, or when camera scanning is unavailable.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = barcode,
+                onValueChange = { value ->
+                    onBarcodeChange(value.filter { it.isDigit() }.take(32))
+                },
+                placeholder = { Text("Example: 5449000000996") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                    focusedContainerColor = MaterialTheme.colorScheme.background,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.background
+                ),
+                trailingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Button(
+                onClick = onLookup,
+                enabled = barcode.isNotBlank() && !isLoading,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                shape = CircleShape,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(imageVector = Icons.Default.Search, contentDescription = null)
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text("Lookup product", fontWeight = FontWeight.Bold)
                 }
             }
         }

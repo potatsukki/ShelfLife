@@ -8,6 +8,14 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+data class ScannerUiState(
+    val isLoading: Boolean = false,
+    val barcode: String? = null,
+    val pendingIngredient: Ingredient? = null,
+    val message: String? = null,
+    val isError: Boolean = false
+)
+
 class ShelfLifeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = ShelfLifeDatabase.getDatabase(application)
@@ -259,59 +267,89 @@ class ShelfLifeViewModel(application: Application) : AndroidViewModel(applicatio
     val measurementSystemMetric = MutableStateFlow(true)
     val userHouseholdSharing = MutableStateFlow(false)
 
-    // --- Barcode Scanner view simulation & real camera scanning ---
-    private val _scannerState = MutableStateFlow<String?>(null) // "idle", "scanned", "error"
-    val scannerState: StateFlow<String?> = _scannerState.asStateFlow()
+    // --- Barcode Scanner lookup and confirmation ---
+    private val _scannerUiState = MutableStateFlow(ScannerUiState())
+    val scannerUiState: StateFlow<ScannerUiState> = _scannerUiState.asStateFlow()
 
     fun scanRealBarcode(context: android.content.Context) {
-        _scannerState.value = "scanning"
+        _scannerUiState.value = ScannerUiState(isLoading = true, message = "Opening camera scanner...")
         try {
             val scanner = com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(context)
             scanner.startScan()
                 .addOnSuccessListener { barcode ->
                     val code = barcode.rawValue
                     if (!code.isNullOrBlank()) {
-                        simulateScan(code)
+                        lookupBarcode(code)
                     } else {
-                        _scannerState.value = null
+                        _scannerUiState.value = ScannerUiState(
+                            message = "No barcode was captured. Try again or enter the code manually.",
+                            isError = true
+                        )
                     }
                 }
                 .addOnFailureListener { e ->
                     android.util.Log.e("ShelfLifeViewModel", "Scan error: ${e.message}")
-                    _scannerState.value = "Scanner not available on current environment (try on real device!):\n${e.localizedMessage}"
+                    _scannerUiState.value = ScannerUiState(
+                        message = "Scanner is not available here. Try a real device or enter the barcode manually.",
+                        isError = true
+                    )
                 }
         } catch (e: Exception) {
             android.util.Log.e("ShelfLifeViewModel", "Scanner launch error: ${e.message}")
-            _scannerState.value = "Scanning failed to initialize: ${e.localizedMessage}"
+            _scannerUiState.value = ScannerUiState(
+                message = "Scanning failed to initialize: ${e.localizedMessage}",
+                isError = true
+            )
         }
     }
 
-    fun simulateScan(barcode: String? = null) {
+    fun lookupBarcode(barcode: String) {
         viewModelScope.launch {
-            _scannerState.value = "scanning"
-            kotlinx.coroutines.delay(1200)
-            val codeToLookup = if (barcode.isNullOrBlank()) {
-                listOf(
-                    "3017611154000", // Nutella
-                    "5449000000996", // Coca Cola
-                    "0737628005076", // Gluten Free Spaghetti
-                    "0011110425072"  // Kroger Spinach
-                ).random()
-            } else {
-                barcode.trim()
+            val codeToLookup = barcode.trim()
+            if (codeToLookup.isBlank()) {
+                _scannerUiState.value = ScannerUiState(
+                    message = "Enter a barcode first.",
+                    isError = true
+                )
+                return@launch
             }
+
+            _scannerUiState.value = ScannerUiState(
+                isLoading = true,
+                barcode = codeToLookup,
+                message = "Looking up barcode..."
+            )
+
             val fetched = repository.lookupProduct(codeToLookup)
             if (fetched != null) {
-                repository.insertIngredient(fetched)
-                _scannerState.value = "Success! Detected: ${fetched.name} (${fetched.quantity} ${fetched.unit}). Added directly to your ${fetched.location}."
+                _scannerUiState.value = ScannerUiState(
+                    barcode = codeToLookup,
+                    pendingIngredient = fetched,
+                    message = "Product found. Review it before adding to your pantry."
+                )
             } else {
-                _scannerState.value = "Lookup failed for barcode: $codeToLookup. Try another barcode or add it manually!"
+                _scannerUiState.value = ScannerUiState(
+                    barcode = codeToLookup,
+                    message = "No product match found for $codeToLookup. Try another barcode or add it manually.",
+                    isError = true
+                )
             }
+        }
+    }
+
+    fun confirmScannedIngredient() {
+        val ingredient = _scannerUiState.value.pendingIngredient ?: return
+        viewModelScope.launch {
+            repository.insertIngredient(ingredient)
+            _scannerUiState.value = ScannerUiState(
+                message = "${ingredient.name} was added to your ${ingredient.location}.",
+                barcode = _scannerUiState.value.barcode
+            )
         }
     }
 
     fun resetScanner() {
-        _scannerState.value = null
+        _scannerUiState.value = ScannerUiState()
     }
 
     // --- Prep Prepopulated Demo Data & Surgical Clean ---

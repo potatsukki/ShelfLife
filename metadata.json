@@ -1,0 +1,6 @@
+{
+  "name": "ShelfLife",
+  "description": "ShelfLife is a smart kitchen and pantry companion that tracks ingredients, reduces food waste, and gets recipe ideas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

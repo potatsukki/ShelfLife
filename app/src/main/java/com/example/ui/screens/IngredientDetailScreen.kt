@@ -2,7 +2,6 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -10,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -53,6 +53,7 @@ fun IngredientDetailScreen(
     val daysLeft = viewModel.getDaysExpiry(ingredient.expirationDate)
     val isDark = MaterialTheme.colorScheme.isDark
     val cardBgColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White
+    var confirmAction by remember { mutableStateOf<String?>(null) }
 
     // Layout configuration depending on alert state
     val (statusColor, statusBg, statusText) = when {
@@ -200,7 +201,7 @@ fun IngredientDetailScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(imageVector = Icons.Default.Notes, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Icon(imageVector = Icons.AutoMirrored.Filled.Notes, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text("Notes", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Spacer(modifier = Modifier.height(4.dp))
@@ -273,11 +274,8 @@ fun IngredientDetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Action: Mark as Used (Delete)
-                    Button(
-                        onClick = {
-                            viewModel.deleteIngredient(ingredient)
-                            onBack()
-                        },
+                Button(
+                    onClick = { confirmAction = "used" },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.weight(1f)
@@ -293,10 +291,7 @@ fun IngredientDetailScreen(
 
                     // Action: Delete completely
                     OutlinedButton(
-                        onClick = {
-                            viewModel.deleteIngredient(ingredient)
-                            onBack()
-                        },
+                        onClick = { confirmAction = "delete" },
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = SoftCoralError),
                         border = BorderStroke(1.dp, SoftCoralError),
                         shape = RoundedCornerShape(16.dp),
@@ -313,6 +308,41 @@ fun IngredientDetailScreen(
                 }
             }
         }
+    }
+
+    confirmAction?.let { action ->
+        AlertDialog(
+            onDismissRequest = { confirmAction = null },
+            title = { Text(if (action == "used") "Mark item as used?" else "Delete ingredient?") },
+            text = {
+                Text(
+                    if (action == "used") {
+                        "This removes ${ingredient.name} from your pantry because it has been used."
+                    } else {
+                        "This permanently removes ${ingredient.name} from your pantry."
+                    }
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        confirmAction = null
+                        viewModel.deleteIngredient(ingredient)
+                        onBack()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (action == "used") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text(if (action == "used") "Mark Used" else "Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmAction = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

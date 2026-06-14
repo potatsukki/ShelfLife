@@ -3,7 +3,6 @@ package com.example.ui.screens
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,14 +18,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.example.data.SavedRecipe
+import com.example.ui.components.ShelfLifeAsyncImage
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ShelfLifeViewModel
 
@@ -38,6 +35,7 @@ fun RecipesScreen(
 ) {
     val recipes by viewModel.suggestedRecipes.collectAsState()
     val loading by viewModel.recipeLoading.collectAsState()
+    val recipeState by viewModel.recipeGenerationState.collectAsState()
 
     var activeTab by remember { mutableStateOf("Suggested") }
 
@@ -144,9 +142,13 @@ fun RecipesScreen(
                 }
             }
 
-            if (recipes.isEmpty() && !loading) {
+            if (!recipeState.errorMessage.isNullOrBlank() && !loading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No suggested recipes. Tap 'Match' above to suggest!", color = SoftGrayText)
+                    Text(recipeState.errorMessage.orEmpty(), color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center, modifier = Modifier.padding(24.dp))
+                }
+            } else if (recipes.isEmpty() && !loading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No recipe suggestions yet. Add pantry items, then tap Match.", color = SoftGrayText, textAlign = TextAlign.Center, modifier = Modifier.padding(24.dp))
                 }
             } else if (loading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -265,11 +267,8 @@ fun RecipeItemCard(
                     .fillMaxWidth()
                     .height(140.dp)
             ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(recipe.imageResUrl)
-                        .crossfade(true)
-                        .build(),
+                ShelfLifeAsyncImage(
+                    imageUrl = recipe.imageResUrl,
                     contentDescription = recipe.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

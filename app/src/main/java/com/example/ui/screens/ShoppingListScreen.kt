@@ -3,7 +3,6 @@ package com.example.ui.screens
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -34,6 +33,7 @@ fun ShoppingListScreen(viewModel: ShelfLifeViewModel) {
     val textInputBgColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White
 
     var activeInput by remember { mutableStateOf("") }
+    var showClearCheckedDialog by remember { mutableStateOf(false) }
 
     // Group items by category to display as checklist headers
     val groupedItems = remember(items) {
@@ -67,7 +67,7 @@ fun ShoppingListScreen(viewModel: ShelfLifeViewModel) {
 
                 if (items.any { it.isChecked }) {
                     TextButton(
-                        onClick = { viewModel.clearCheckedShoppingItems() },
+                        onClick = { showClearCheckedDialog = true },
                         colors = ButtonDefaults.textButtonColors(contentColor = SoftCoralError)
                     ) {
                         Row(
@@ -179,6 +179,30 @@ fun ShoppingListScreen(viewModel: ShelfLifeViewModel) {
                 }
             }
         }
+
+        if (showClearCheckedDialog) {
+            AlertDialog(
+                onDismissRequest = { showClearCheckedDialog = false },
+                title = { Text("Clear checked items?") },
+                text = { Text("This removes all completed shopping items from your list.") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showClearCheckedDialog = false
+                            viewModel.clearCheckedShoppingItems()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Clear")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearCheckedDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -237,6 +261,11 @@ fun ShoppingItemRow(
                         } else {
                             MaterialTheme.colorScheme.onSurface
                         }
+                    )
+                    Text(
+                        text = "${item.quantity} ${item.unit}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f) else SoftGrayText
                     )
                     if (item.sourceRecipeName != null) {
                         Text(

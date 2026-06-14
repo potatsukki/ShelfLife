@@ -6,6 +6,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "ingredients")
 data class Ingredient(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val userId: String,
     val name: String,
     val category: String, // "Produce", "Dairy", "Meat", "Grains", "Pantry", etc.
     val quantity: Double,
@@ -20,6 +21,7 @@ data class Ingredient(
 @Entity(tableName = "shopping_items")
 data class ShoppingItem(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val userId: String,
     val name: String,
     val quantity: Double = 1.0,
     val unit: String = "pcs",
@@ -28,9 +30,10 @@ data class ShoppingItem(
     val sourceRecipeName: String? = null // if added from a recipe
 )
 
-@Entity(tableName = "saved_recipes")
+@Entity(tableName = "saved_recipes", primaryKeys = ["id", "userId"])
 data class SavedRecipe(
-    @PrimaryKey val id: String, // Use lowercase identifier or similar
+    val id: String,
+    val userId: String,
     val name: String,
     val prepTime: String,
     val difficulty: String,

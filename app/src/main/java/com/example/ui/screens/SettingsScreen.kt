@@ -3,13 +3,14 @@ package com.example.ui.screens
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,14 +19,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ShelfLifeViewModel
 
@@ -36,13 +34,8 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
 
-    val isExpirationAlerts by viewModel.notificationExpirationAlerts.collectAsState()
-    val isLowStockAlerts by viewModel.notificationLowStockAlerts.collectAsState()
-    val isVegetarianMode by viewModel.dietaryVegetarian.collectAsState()
-    val isSmartRecipes by viewModel.smartRecipeIdeas.collectAsState()
-    val isMetric by viewModel.measurementSystemMetric.collectAsState()
-    val isHouseholdSharing by viewModel.userHouseholdSharing.collectAsState()
-    val isDarkMode by viewModel.isDarkMode.collectAsState()
+    val settings by viewModel.settingsState.collectAsState()
+    val authState by viewModel.authUiState.collectAsState()
 
     var showSignOutDialog by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
@@ -77,25 +70,23 @@ fun SettingsScreen(
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                 ) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data("https://lh3.googleusercontent.com/aida-public/AB6AXuDF_w9cpOE2usbzEdTM9c3iOKc43nzRphhx545sr5vT-xMI7Ehv-_TxUFUxDgbr2eNTu5AZEzenScBCtKifIqwcof8gh1nDbROj5ekx2E2VdZcXJ3SRZcdR1qvwBLG5Y3oEGfzUmfQX_fW7HrCMEG74R4dqoZSmSDpaOoMr8Fe9PMJBqKZcBhWwoo-CwZHxlqZPPB4nLX34ayx06wQ8JlBWs-jD-BjL6PzTHsq_ri0LREQUjk5DqZgHXQ_SR-tk6XdlXgVu9SZP5RGW")
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = "User avatar",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+                    Text(
+                        text = authState.initials,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.align(Alignment.Center)
                     )
                 }
 
                 Column {
                     Text(
-                        text = "Alex Carter",
+                        text = authState.displayLabel,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Primary Household Cook",
+                        text = authState.email ?: "Signed in user",
                         style = MaterialTheme.typography.bodySmall,
                         color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText
                     )
@@ -108,16 +99,16 @@ fun SettingsScreen(
         SettingsToggleRow(
             label = "Expiration Date Alerts",
             description = "Notify me 3 days before any item expires",
-            isChecked = isExpirationAlerts,
-            onCheckedChange = { viewModel.notificationExpirationAlerts.value = it },
+            isChecked = settings.expirationAlerts,
+            onCheckedChange = { viewModel.setExpirationAlerts(it) },
             icon = Icons.Default.NotificationsActive
         )
         SettingsToggleRow(
             label = "Low Stock Alerts",
             description = "Notify me when pantry items hit threshold",
-            isChecked = isLowStockAlerts,
-            onCheckedChange = { viewModel.notificationLowStockAlerts.value = it },
-            icon = Icons.Default.TrendingDown
+            isChecked = settings.lowStockAlerts,
+            onCheckedChange = { viewModel.setLowStockAlerts(it) },
+            icon = Icons.AutoMirrored.Filled.TrendingDown
         )
 
         // Dietary preferences
@@ -125,15 +116,15 @@ fun SettingsScreen(
         SettingsToggleRow(
             label = "Vegetarian Match Focus",
             description = "Prioritize vegetarian recipe suggestions",
-            isChecked = isVegetarianMode,
-            onCheckedChange = { viewModel.dietaryVegetarian.value = it },
+            isChecked = settings.vegetarianMode,
+            onCheckedChange = { viewModel.setVegetarianMode(it) },
             icon = Icons.Default.Spa
         )
         SettingsToggleRow(
             label = "Smart Recipe Suggestions",
             description = "Enable real-time OpenRouter recipe ideas",
-            isChecked = isSmartRecipes,
-            onCheckedChange = { viewModel.smartRecipeIdeas.value = it },
+            isChecked = settings.smartRecipeIdeas,
+            onCheckedChange = { viewModel.setSmartRecipeIdeas(it) },
             icon = Icons.Default.AutoAwesome
         )
 
@@ -142,22 +133,22 @@ fun SettingsScreen(
         SettingsToggleRow(
             label = "Dark Theme",
             description = "Switch between cozy Warm Hearth theme and Dark Walnut theme",
-            isChecked = isDarkMode,
-            onCheckedChange = { viewModel.isDarkMode.value = it },
+            isChecked = settings.isDarkMode,
+            onCheckedChange = { viewModel.setDarkMode(it) },
             icon = Icons.Default.DarkMode
         )
         SettingsToggleRow(
             label = "Metric Measurement System",
             description = "Use Kilograms and Liters (else Pounds and Cups)",
-            isChecked = isMetric,
-            onCheckedChange = { viewModel.measurementSystemMetric.value = it },
+            isChecked = settings.metricMeasurements,
+            onCheckedChange = { viewModel.setMetricMeasurements(it) },
             icon = Icons.Default.Scale
         )
         SettingsToggleRow(
             label = "Household Sync",
             description = "Share pantry state with family members",
-            isChecked = isHouseholdSharing,
-            onCheckedChange = { viewModel.userHouseholdSharing.value = it },
+            isChecked = settings.householdSharing,
+            onCheckedChange = { viewModel.setHouseholdSharing(it) },
             icon = Icons.Default.Group
         )
 
@@ -205,7 +196,7 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.Logout, contentDescription = null, tint = SoftCoralError)
+                    Icon(imageVector = Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = SoftCoralError)
                     Text("Sign Out of ShelfLife", color = OnSoftCoralContainer, style = MaterialTheme.typography.labelLarge)
                 }
             }
@@ -245,8 +236,8 @@ fun SettingsScreen(
                     Button(
                         onClick = {
                             showSignOutDialog = false
-                            Toast.makeText(context, "Logged out successfully!", Toast.LENGTH_SHORT).show()
-                            onNavigateBack()
+                            viewModel.signOut()
+                            Toast.makeText(context, "Signed out successfully.", Toast.LENGTH_SHORT).show()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = SoftCoralError)
                     ) {

@@ -66,11 +66,14 @@ object OFFClient {
 
 object ProductLookupHelper {
 
-    suspend fun lookupBarcode(barcode: String): Ingredient? = withContext(Dispatchers.IO) {
+    suspend fun lookupBarcode(
+        barcode: String,
+        userId: String,
+        aiFallback: suspend () -> Ingredient?
+    ): Ingredient? = withContext(Dispatchers.IO) {
         val trimmed = barcode.trim()
         if (trimmed.isBlank()) return@withContext null
 
-        Log.d("ProductLookup", "Looking up barcode: $trimmed via Open Food Facts...")
         try {
             val response = OFFClient.service.getProductDetails(trimmed)
             if (response.status == 1 && response.product != null) {
@@ -82,14 +85,14 @@ object ProductLookupHelper {
                 val category = mapCategoriesToPantryCategory(prod.categories, rawName)
                 val (qty, unit) = parseQuantity(prod.quantity)
 
-                Log.d("ProductLookup", "Found item: $fullName, category: $category, quantity: $qty $unit")
                 return@withContext Ingredient(
+                    userId = userId,
                     name = fullName,
                     category = category,
                     quantity = qty,
                     unit = unit,
-                    expirationDate = getOffsetDate(10), // default offset for fresh items
-                    purchaseDate = getOffsetDate(0),
+                    expirationDate = ProductDates.offsetDate(10),
+                    purchaseDate = ProductDates.offsetDate(0),
                     location = mapCategoryToLocation(category)
                 )
             }
@@ -97,47 +100,10 @@ object ProductLookupHelper {
             Log.e("ProductLookup", "OpenFoodFacts API error: ${e.message}")
         }
 
-        // If Open Food Facts fails, let's fall back to OpenRouter to identify!
-        // This is extremely high-fidelity and fulfills "make the scanner working for real now" beautifully.
-        Log.d("ProductLookup", "OpenRouter fallback lookup for barcode $trimmed...")
         try {
-            val prompt = """
-                Identify the likely grocery food product associated with this barcode: "$trimmed".
-                If you don't know the precise barcode, use your general knowledge of global products or generate a realistic healthy food item.
-                
-                Return output strictly as a JSON object matching this schema:
-                {
-                  "name": "Brand and Product Name (e.g. Quaker Oats)",
-                  "category": "Produce or Dairy or Meat or Grains or Pantry",
-                  "quantity": 1.0,
-                  "unit": "pcs or kg or g or L or ml or pack",
-                  "notes": "Brief notes"
-                }
-                Do not wrap in markdown or backticks, just return raw JSON.
-            """.trimIndent()
-
-            val request = OpenRouterRequest(
-                model = OpenRouterConfig.defaultModel,
-                messages = listOf(
-                    OpenRouterMessage(role = "user", content = prompt)
-                ),
-                temperature = 0.3f,
-                response_format = OpenRouterResponseFormat(type = "json_object")
-            )
-            
-            val response = OpenRouterClient.service.getChatCompletion(
-                authHeader = OpenRouterConfig.authHeader,
-                request = request
-            )
-            val text = response.choices?.firstOrNull()?.message?.content
-            if (!text.isNullOrBlank()) {
-                val parsed = parseOpenRouterProduct(text)
-                if (parsed != null) {
-                    return@withContext parsed
-                }
-            }
+            return@withContext aiFallback()
         } catch (e: Exception) {
-            Log.e("ProductLookup", "OpenRouter lookup error: ${e.message}")
+            Log.e("ProductLookup", "AI barcode fallback error: ${e.message}")
         }
 
         null
@@ -198,43 +164,4 @@ object ProductLookupHelper {
         }
     }
 
-    private fun parseOpenRouterProduct(json: String): Ingredient? {
-        try {
-            val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
-            val adapter = moshi.adapter(OpenRouterProductJson::class.java)
-            val parsed = adapter.fromJson(json.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim())
-            if (parsed != null) {
-                val cat = parsed.category ?: "Pantry"
-                return Ingredient(
-                    name = parsed.name ?: "Imported Item",
-                    category = cat,
-                    quantity = parsed.quantity ?: 1.0,
-                    unit = parsed.unit ?: "pcs",
-                    expirationDate = getOffsetDate(10),
-                    purchaseDate = getOffsetDate(0),
-                    location = mapCategoryToLocation(cat),
-                    notes = parsed.notes ?: "Scanned barcode lookup"
-                )
-            }
-        } catch (e: Exception) {
-            Log.e("ProductLookup", "Failed parsing OpenRouter fallback: ${e.message}")
-        }
-        return null
-    }
-
-    private fun getOffsetDate(offsetDays: Int): String {
-        val format = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-        val cal = java.util.Calendar.getInstance()
-        cal.add(java.util.Calendar.DATE, offsetDays)
-        return format.format(cal.time)
-    }
 }
-
-@JsonClass(generateAdapter = true)
-data class OpenRouterProductJson(
-    val name: String?,
-    val category: String?,
-    val quantity: Double?,
-    val unit: String?,
-    val notes: String?
-)

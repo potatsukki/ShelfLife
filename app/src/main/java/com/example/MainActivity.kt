@@ -25,6 +25,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val viewModel: ShelfLifeViewModel = viewModel()
             val isDarkModeEnabled by viewModel.isDarkMode.collectAsState()
+            val authState by viewModel.authUiState.collectAsState()
 
             MyApplicationTheme(darkTheme = isDarkModeEnabled) {
                 val currentRoute by viewModel.currentRoute.collectAsState()
@@ -52,6 +53,7 @@ class MainActivity : ComponentActivity() {
                             }
                             ShelfLifeTopBar(
                                 title = headerTitle,
+                                authState = authState,
                                 onAvatarClick = { viewModel.navigateTo("settings") },
                                 onSettingsClick = { viewModel.navigateTo("settings") }
                             )
@@ -70,6 +72,9 @@ class MainActivity : ComponentActivity() {
                         when {
                             currentRoute == "splash" -> {
                                 SplashScreen(viewModel = viewModel)
+                            }
+                            currentRoute == "auth" -> {
+                                AuthScreen(viewModel = viewModel)
                             }
                             currentRoute == "onboarding_1" -> {
                                 OnboardingScreenOne(viewModel = viewModel)
@@ -98,7 +103,15 @@ class MainActivity : ComponentActivity() {
                             currentRoute == "add_ingredient" -> {
                                 AddIngredientScreen(
                                     viewModel = viewModel,
-                                    onBack = { viewModel.navigateTo("pantry") }
+                                    onBack = { viewModel.navigateTo("pantry") },
+                                    ingredientId = null
+                                )
+                            }
+                            currentRoute == "edit_ingredient" && activeIngredientId != null -> {
+                                AddIngredientScreen(
+                                    viewModel = viewModel,
+                                    onBack = { viewModel.navigateTo("pantry") },
+                                    ingredientId = activeIngredientId
                                 )
                             }
                             currentRoute == "ingredient_detail" && activeIngredientId != null -> {
@@ -106,9 +119,9 @@ class MainActivity : ComponentActivity() {
                                     viewModel = viewModel,
                                     id = activeIngredientId!!,
                                     onBack = { viewModel.navigateTo("pantry") },
-                                    onEdit = { _ ->
-                                        // Simple mockup fallback
-                                        viewModel.navigateTo("pantry")
+                                    onEdit = { id ->
+                                        activeIngredientId = id
+                                        viewModel.navigateTo("edit_ingredient")
                                     }
                                 )
                             }

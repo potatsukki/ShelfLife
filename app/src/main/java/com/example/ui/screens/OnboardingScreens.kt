@@ -23,14 +23,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ShelfLifeViewModel
 
@@ -49,7 +45,7 @@ fun SplashScreen(viewModel: ShelfLifeViewModel) {
 
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(2000)
-        viewModel.navigateTo("onboarding_1")
+        viewModel.finishSplash()
     }
 
     Box(
@@ -164,17 +160,20 @@ fun OnboardingScreenOne(viewModel: ShelfLifeViewModel) {
                     .background(Color.White)
                     .padding(8.dp)
             ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data("https://lh3.googleusercontent.com/aida-public/AB6AXuDn1b_5FbATUKArud5cL8ySxE9HnDbCm-im_11Or0nuaxkc2tPmrAAyUasWFnlYiUW_e2MYouf_nrMrPjuiQM3fwhJbM1EjMPq7wNu7ThOjvZ_X8cvDW2ijQ7-F0TiGznZICNgNsbfpse1avxBLTjn_7m_YC3L3FtRN3bpIWwXpuanmRSEP3xPV64WCSK6fxlziwjqe8QckwHnmwnQ7EeatUd8gogbXNCM3zD3klHLrQZDB2YwGhdcXhYw-cAgRQ5I5Wt5c13h-pxo-")
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = "Pantry organizaton image",
-                    contentScale = ContentScale.Crop,
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(RoundedCornerShape(16.dp))
-                )
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Kitchen,
+                        contentDescription = "Pantry organization",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(96.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -214,7 +213,7 @@ fun OnboardingScreenOne(viewModel: ShelfLifeViewModel) {
 
             // Next button
             Button(
-                onClick = { viewModel.navigateTo("onboarding_2") },
+                onClick = { viewModel.nextOnboarding() },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
                 shape = CircleShape,
@@ -405,7 +404,7 @@ fun OnboardingScreenTwo(viewModel: ShelfLifeViewModel) {
 
             // Next button
             Button(
-                onClick = { viewModel.navigateTo("onboarding_3") },
+                onClick = { viewModel.nextOnboarding() },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
                 shape = CircleShape,
@@ -472,15 +471,19 @@ fun OnboardingScreenThree(viewModel: ShelfLifeViewModel) {
                                 .height(160.dp)
                                 .clip(RoundedCornerShape(12.dp))
                         ) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(LocalContext.current)
-                                    .data("https://lh3.googleusercontent.com/aida-public/AB6AXuBevjdipu45hKqZpw1J6_k7NHztbdk-6JIQ0mBYYtZN6PLJKJ6E6jj7uv27d2LGTY299mrrjKSbZxorAr5hpECi9sPYg_Icrcm4D1Y0VRGM6yOmVfgqiWEReO8mcIJzfRCBWKGiFFrrdJfjmP4sd9TS-66gkppA_zdq4ep8YKBxZxeFRwmvomnITMjbn6jBMu8nJx22G7S8syqlCENlqXp0IyLgIzdj7YuriReakiEfAZoJvgVG_LMERfjAtUMzLzNZ-PV4U2DAWOHv")
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = "Chicken Stir Fry",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.RestaurantMenu,
+                                    contentDescription = "Recipe idea",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(72.dp)
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -564,7 +567,7 @@ fun OnboardingScreenThree(viewModel: ShelfLifeViewModel) {
 
             // Next button -> Go dashboard!
             Button(
-                onClick = { viewModel.navigateTo("dashboard") },
+                onClick = { viewModel.nextOnboarding() },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
                 shape = CircleShape,

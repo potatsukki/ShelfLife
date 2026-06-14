@@ -2,10 +2,12 @@ package com.example.data
 
 import android.content.Context
 import androidx.room.Database
+import androidx.room.migration.Migration
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [Ingredient::class, ShoppingItem::class, SavedRecipe::class], version = 1, exportSchema = false)
+@Database(entities = [Ingredient::class, ShoppingItem::class, SavedRecipe::class], version = 2, exportSchema = false)
 abstract class ShelfLifeDatabase : RoomDatabase() {
     abstract val dao: ShelfLifeDao
 
@@ -20,10 +22,47 @@ abstract class ShelfLifeDatabase : RoomDatabase() {
                     ShelfLifeDatabase::class.java,
                     "shelflife_database"
                 )
-                .fallbackToDestructiveMigration()
+                .addMigrations(MIGRATION_1_2)
                 .build()
                 INSTANCE = instance
                 instance
+            }
+        }
+
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE ingredients ADD COLUMN userId TEXT NOT NULL DEFAULT 'legacy_local_user'")
+                db.execSQL("ALTER TABLE shopping_items ADD COLUMN userId TEXT NOT NULL DEFAULT 'legacy_local_user'")
+                db.execSQL(
+                    """
+                    CREATE TABLE saved_recipes_new (
+                        id TEXT NOT NULL,
+                        userId TEXT NOT NULL DEFAULT 'legacy_local_user',
+                        name TEXT NOT NULL,
+                        prepTime TEXT NOT NULL,
+                        difficulty TEXT NOT NULL,
+                        imageResUrl TEXT NOT NULL,
+                        whySuggested TEXT NOT NULL,
+                        ingredientsCsv TEXT NOT NULL,
+                        stepsCsv TEXT NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        PRIMARY KEY(id, userId)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO saved_recipes_new (
+                        id, userId, name, prepTime, difficulty, imageResUrl,
+                        whySuggested, ingredientsCsv, stepsCsv, timestamp
+                    )
+                    SELECT id, 'legacy_local_user', name, prepTime, difficulty, imageResUrl,
+                        whySuggested, ingredientsCsv, stepsCsv, timestamp
+                    FROM saved_recipes
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE saved_recipes")
+                db.execSQL("ALTER TABLE saved_recipes_new RENAME TO saved_recipes")
             }
         }
     }

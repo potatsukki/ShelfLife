@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -27,13 +26,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ShelfLifeViewModel
+import kotlinx.coroutines.flow.flowOf
 import java.text.SimpleDateFormat
 import java.util.*
 
 @Composable
 fun AddIngredientScreen(
     viewModel: ShelfLifeViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    ingredientId: Int? = null
 ) {
     val isDark = MaterialTheme.colorScheme.isDark
     val inputBgColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White
@@ -57,6 +58,23 @@ fun AddIngredientScreen(
     var location by remember { mutableStateOf("Fridge") }
     var thresholdStr by remember { mutableStateOf("1.0") }
     var notes by remember { mutableStateOf("") }
+    var formError by remember { mutableStateOf<String?>(null) }
+    val existingIngredient by remember(ingredientId) {
+        if (ingredientId == null) flowOf(null) else viewModel.getIngredientDetails(ingredientId)
+    }.collectAsState(initial = null)
+
+    LaunchedEffect(existingIngredient?.id) {
+        val ingredient = existingIngredient ?: return@LaunchedEffect
+        name = ingredient.name
+        category = ingredient.category
+        quantityStr = ingredient.quantity.toString()
+        unit = ingredient.unit
+        purchaseDate = ingredient.purchaseDate
+        expirationDate = ingredient.expirationDate
+        location = ingredient.location
+        thresholdStr = ingredient.lowStockThreshold.toString()
+        notes = ingredient.notes
+    }
 
     val categories = listOf("Produce", "Dairy", "Meat", "Grains", "Pantry")
     val units = listOf("pcs", "kg", "g", "L", "ml", "pack")
@@ -76,7 +94,7 @@ fun AddIngredientScreen(
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
-                    text = "Add Ingredient",
+                    text = if (ingredientId == null) "Add Ingredient" else "Edit Ingredient",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -399,23 +417,55 @@ fun AddIngredientScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            formError?.let {
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
             // Save actions
             Button(
                 onClick = {
-                    val qty = quantityStr.toDoubleOrNull() ?: 1.0
-                    val threshold = thresholdStr.toDoubleOrNull() ?: 1.0
-                    if (name.isNotBlank()) {
-                        viewModel.addIngredient(
-                            name = name,
-                            category = category,
-                            quantity = qty,
-                            unit = unit,
-                            expirationDate = expirationDate,
-                            purchaseDate = purchaseDate,
-                            location = location,
-                            lowStockThreshold = threshold,
-                            notes = notes
-                        )
+                    val qty = quantityStr.toDoubleOrNull()
+                    val threshold = thresholdStr.toDoubleOrNull()
+                    formError = when {
+                        name.isBlank() -> "Ingredient name is required."
+                        qty == null || qty <= 0.0 -> "Quantity must be a number greater than zero."
+                        threshold == null || threshold < 0.0 -> "Low stock threshold must be zero or greater."
+                        !isValidDate(purchaseDate) || !isValidDate(expirationDate) -> "Dates must use YYYY-MM-DD format."
+                        else -> null
+                    }
+                    if (formError == null) {
+                        val existing = existingIngredient
+                        if (existing == null) {
+                            viewModel.addIngredient(
+                                name = name,
+                                category = category,
+                                quantity = qty!!,
+                                unit = unit,
+                                expirationDate = expirationDate,
+                                purchaseDate = purchaseDate,
+                                location = location,
+                                lowStockThreshold = threshold!!,
+                                notes = notes
+                            )
+                        } else {
+                            viewModel.updateIngredient(
+                                existing.copy(
+                                    name = name.trim(),
+                                    category = category,
+                                    quantity = qty!!,
+                                    unit = unit,
+                                    expirationDate = expirationDate,
+                                    purchaseDate = purchaseDate,
+                                    location = location,
+                                    lowStockThreshold = threshold!!,
+                                    notes = notes.trim()
+                                )
+                            )
+                        }
                         onBack()
                     }
                 },
@@ -427,8 +477,19 @@ fun AddIngredientScreen(
                     .padding(bottom = 40.dp)
                     .testTag("save_ingredient_button")
             ) {
-                Text("Save Ingredient", color = Color.White, style = MaterialTheme.typography.labelLarge)
+                Text(if (ingredientId == null) "Save Ingredient" else "Update Ingredient", color = Color.White, style = MaterialTheme.typography.labelLarge)
             }
         }
+    }
+}
+
+private fun isValidDate(value: String): Boolean {
+    return try {
+        val format = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        format.isLenient = false
+        format.parse(value)
+        true
+    } catch (_: Exception) {
+        false
     }
 }

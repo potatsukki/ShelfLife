@@ -4,7 +4,6 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -207,11 +206,8 @@ fun PantryIngredientItem(
         )
     }
 
-    // Progress percentage (fake dynamic based on 10 days span)
-    val progressPercent = remember(daysLeft) {
-        if (daysLeft < 0) 1f
-        else if (daysLeft > 10) 0.1f
-        else (10f - daysLeft) / 10f
+    val progressPercent = remember(item.purchaseDate, item.expirationDate, daysLeft) {
+        expiryProgress(item.purchaseDate, item.expirationDate)
     }
 
     Card(
@@ -228,7 +224,6 @@ fun PantryIngredientItem(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Category emoji mock
                 Box(
                     modifier = Modifier
                         .size(44.dp)
@@ -310,5 +305,18 @@ fun PantryIngredientItem(
                     .clip(CircleShape)
             )
         }
+    }
+}
+
+private fun expiryProgress(purchaseDate: String, expirationDate: String): Float {
+    return try {
+        val format = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        val purchase = format.parse(purchaseDate)?.time ?: return 0f
+        val expiry = format.parse(expirationDate)?.time ?: return 0f
+        val today = format.parse(format.format(java.util.Date()))?.time ?: return 0f
+        val total = (expiry - purchase).coerceAtLeast(1L)
+        ((today - purchase).toFloat() / total.toFloat()).coerceIn(0f, 1f)
+    } catch (_: Exception) {
+        0f
     }
 }

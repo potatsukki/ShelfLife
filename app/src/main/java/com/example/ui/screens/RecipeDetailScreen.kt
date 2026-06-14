@@ -3,7 +3,6 @@ package com.example.ui.screens
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -24,9 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.example.data.SavedRecipe
+import com.example.ui.components.ShelfLifeAsyncImage
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ShelfLifeViewModel
 
@@ -100,11 +98,8 @@ fun RecipeDetailScreen(
                     .fillOuterWidth()
                     .height(200.dp)
             ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(recipe.imageResUrl)
-                        .crossfade(true)
-                        .build(),
+                ShelfLifeAsyncImage(
+                    imageUrl = recipe.imageResUrl,
                     contentDescription = recipe.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
@@ -300,7 +295,7 @@ fun RecipeDetailScreen(
                 // Start Cook Button
                 Button(
                     onClick = {
-                        Toast.makeText(context, "Enjoy cooking ${recipe.name}! Streak updated! 🎉", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "Started ${recipe.name}.", Toast.LENGTH_LONG).show()
                         onBack()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),

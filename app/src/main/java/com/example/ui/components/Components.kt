@@ -2,7 +2,6 @@ package com.example.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,13 +22,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
 import coil.request.ImageRequest
+import com.example.data.AuthUiState
 import com.example.ui.theme.*
 
 // --- Custom Reusable Top Bar ---
 @Composable
 fun ShelfLifeTopBar(
     title: String,
+    authState: AuthUiState,
     onAvatarClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {}
 ) {
@@ -42,23 +44,19 @@ fun ShelfLifeTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Avatar Image
         Box(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .background(MaterialTheme.colorScheme.primaryContainer)
                 .clickable { onAvatarClick() },
             contentAlignment = Alignment.Center
         ) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data("https://lh3.googleusercontent.com/aida-public/AB6AXuDF_w9cpOE2usbzEdTM9c3iOKc43nzRphhx545sr5vT-xMI7Ehv-_TxUFUxDgbr2eNTu5AZEzenScBCtKifIqwcof8gh1nDbROj5ekx2E2VdZcXJ3SRZcdR1qvwBLG5Y3oEGfzUmfQX_fW7HrCMEG74R4dqoZSmSDpaOoMr8Fe9PMJBqKZcBhWwoo-CwZHxlqZPPB4nLX34ayx06wQ8JlBWs-jD-BjL6PzTHsq_ri0LREQUjk5DqZgHXQ_SR-tk6XdlXgVu9SZP5RGW")
-                    .crossfade(true)
-                    .build(),
-                contentDescription = "User profile",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+            Text(
+                text = authState.initials,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Bold
             )
         }
 
@@ -84,6 +82,43 @@ fun ShelfLifeTopBar(
             )
         }
     }
+}
+
+@Composable
+fun ShelfLifeAsyncImage(
+    imageUrl: String?,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop
+) {
+    if (imageUrl.isNullOrBlank()) {
+        Box(
+            modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.RestaurantMenu,
+                contentDescription = contentDescription,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(40.dp)
+            )
+        }
+        return
+    }
+
+    AsyncImage(
+        model = ImageRequest.Builder(LocalContext.current)
+            .data(imageUrl)
+            .crossfade(true)
+            .diskCachePolicy(CachePolicy.ENABLED)
+            .memoryCachePolicy(CachePolicy.ENABLED)
+            .build(),
+        contentDescription = contentDescription,
+        contentScale = contentScale,
+        modifier = modifier,
+        error = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Default.RestaurantMenu),
+        placeholder = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Default.RestaurantMenu)
+    )
 }
 
 // --- Custom Reusable Floating Bottom Bar ---

@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.SavedRecipe
+import com.example.data.recipeIngredients
 import com.example.ui.components.ShelfLifeAsyncImage
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ShelfLifeViewModel
@@ -46,7 +47,8 @@ fun RecipesScreen(
             .padding(bottom = 80.dp) // Leave navigation bar padding
     ) {
         val isDark = MaterialTheme.colorScheme.isDark
-        val tabActiveBg = if (isDark) MaterialTheme.colorScheme.background else Color.White
+        val tabActiveBg = if (isDark) MaterialTheme.colorScheme.primaryContainer else Color.White
+        val tabInactiveColor = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText
 
         // Toggle tab selectors: "Suggested Match", "My Favorites"
         Row(
@@ -68,7 +70,7 @@ fun RecipesScreen(
             ) {
                 Text(
                     "✨ Suggested Match",
-                    color = if (activeTab == "Suggested") MaterialTheme.colorScheme.primary else SoftGrayText,
+                    color = if (activeTab == "Suggested") MaterialTheme.colorScheme.onPrimaryContainer else tabInactiveColor,
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp
                 )
@@ -84,7 +86,7 @@ fun RecipesScreen(
             ) {
                 Text(
                     "❤️ My Favorites",
-                    color = if (activeTab == "Favorites") MaterialTheme.colorScheme.primary else SoftGrayText,
+                    color = if (activeTab == "Favorites") MaterialTheme.colorScheme.onPrimaryContainer else tabInactiveColor,
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp
                 )
@@ -194,7 +196,7 @@ fun RecipesScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "Open recipe suggestions and click the heart icon to save resources.",
+                            "Open recipe suggestions and tap the heart icon to save favorites.",
                             color = SoftGrayText,
                             style = MaterialTheme.typography.bodySmall,
                             textAlign = TextAlign.Center
@@ -356,42 +358,32 @@ fun RecipeItemCard(
                     color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText
                 )
 
-                // Preview ingredients CSV
+                // Preview structured ingredients
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    val previewItems = recipe.ingredientsCsv.split(",").take(3)
+                    val allIngredients = recipe.recipeIngredients()
+                    val previewItems = allIngredients.take(3)
                     previewItems.forEach { item ->
-                        val isMissing = item.contains("Missing", ignoreCase = true)
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    if (isMissing) {
-                                        if (isDark) SoftCoralErrorContainer.copy(alpha = 0.2f) else SoftCoralErrorContainer.copy(alpha = 0.5f)
-                                    } else {
-                                        if (isDark) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surfaceVariant
-                                    }
-                                )
+                                .background(if (isDark) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surfaceVariant)
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = item.replace("- have", "").replace("- Missing", "").trim(),
+                                text = item.name,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (isMissing) {
-                                    if (isDark) Color(0xFFFFB4AB) else SoftCoralError
-                                } else {
-                                    if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText
-                                },
+                                color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText,
                                 fontSize = 10.sp
                             )
                         }
                     }
-                    if (recipe.ingredientsCsv.split(",").size > 3) {
-                        Text("+${recipe.ingredientsCsv.split(",").size - 3} more", style = MaterialTheme.typography.labelSmall, color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText)
+                    if (allIngredients.size > 3) {
+                        Text("+${allIngredients.size - 3} more", style = MaterialTheme.typography.labelSmall, color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText)
                     }
                 }
             }

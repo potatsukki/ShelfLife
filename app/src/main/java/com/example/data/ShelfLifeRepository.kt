@@ -69,9 +69,14 @@ class ShelfLifeRepository(
             aiService.generateRecipes(pantryIngredients).map { it.copy(userId = userId) }
         }
 
-    suspend fun askAssistant(chatHistory: List<Pair<String, Boolean>>, latestUserMessage: String): String =
+    suspend fun askAssistant(
+        chatHistory: List<Pair<String, Boolean>>,
+        latestUserMessage: String,
+        recipeContext: RecipeContext?,
+        pantryIngredients: List<Ingredient>
+    ): String =
         withContext(Dispatchers.IO) {
-            aiService.askAssistant(chatHistory, latestUserMessage)
+            aiService.askAssistant(chatHistory, latestUserMessage, recipeContext, pantryIngredients)
         }
 
     suspend fun lookupProduct(userId: String, barcode: String): Ingredient? = withContext(Dispatchers.IO) {

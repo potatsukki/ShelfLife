@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
                             ShelfLifeTopBar(
                                 title = headerTitle,
                                 authState = authState,
-                                onAvatarClick = { viewModel.navigateTo("settings") },
+                                onAvatarClick = { viewModel.navigateTo("profile") },
                                 onSettingsClick = { viewModel.navigateTo("settings") }
                             )
                         }
@@ -147,7 +147,8 @@ class MainActivity : ComponentActivity() {
                                 RecipeDetailScreen(
                                     viewModel = viewModel,
                                     recipe = activeRecipe!!,
-                                    onBack = { viewModel.navigateTo("recipes") }
+                                    onBack = { viewModel.navigateTo("recipes") },
+                                    onStartCooking = { viewModel.navigateTo("guided_cooking") }
                                 )
                             }
                             // Direct matching for recomended Today
@@ -158,7 +159,11 @@ class MainActivity : ComponentActivity() {
                                     RecipeDetailScreen(
                                         viewModel = viewModel,
                                         recipe = matched,
-                                        onBack = { viewModel.navigateTo("dashboard") }
+                                        onBack = { viewModel.navigateTo("dashboard") },
+                                        onStartCooking = {
+                                            viewModel.selectRecipe(matched)
+                                            viewModel.navigateTo("guided_cooking")
+                                        }
                                     )
                                 } else {
                                     viewModel.navigateTo("dashboard")
@@ -177,6 +182,18 @@ class MainActivity : ComponentActivity() {
                                 SettingsScreen(
                                     viewModel = viewModel,
                                     onNavigateBack = { viewModel.navigateTo("dashboard") }
+                                )
+                            }
+                            currentRoute == "profile" -> {
+                                ProfileScreen(
+                                    viewModel = viewModel,
+                                    onNavigateBack = { viewModel.navigateTo("dashboard") }
+                                )
+                            }
+                            currentRoute == "guided_cooking" && activeRecipe != null -> {
+                                GuidedCookingScreen(
+                                    recipe = activeRecipe!!,
+                                    onBack = { viewModel.navigateTo("recipe_detail") }
                                 )
                             }
                         }

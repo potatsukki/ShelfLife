@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -35,9 +36,6 @@ fun SettingsScreen(
     val context = LocalContext.current
 
     val settings by viewModel.settingsState.collectAsState()
-    val authState by viewModel.authUiState.collectAsState()
-
-    var showSignOutDialog by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -50,48 +48,21 @@ fun SettingsScreen(
         val isDark = MaterialTheme.colorScheme.isDark
         val cardBgColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White
 
-        // User Profile Card
-        Card(
-            colors = CardDefaults.cardColors(containerColor = cardBgColor),
-            shape = RoundedCornerShape(24.dp),
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Text(
-                        text = authState.initials,
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                }
-
-                Column {
-                    Text(
-                        text = authState.displayLabel,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = authState.email ?: "Signed in user",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText
-                    )
-                }
+            IconButton(onClick = onNavigateBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go back")
             }
+            Text(
+                text = "Settings",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
         }
 
         // Toggles sections: Alerts Notifications
@@ -177,31 +148,6 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Log out button
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Button(
-                onClick = { showSignOutDialog = true },
-                colors = ButtonDefaults.buttonColors(containerColor = SoftCoralErrorContainer),
-                shape = CircleShape,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = SoftCoralError)
-                    Text("Sign Out of ShelfLife", color = OnSoftCoralContainer, style = MaterialTheme.typography.labelLarge)
-                }
-            }
-        }
-
         if (showResetDialog) {
             AlertDialog(
                 onDismissRequest = { showResetDialog = false },
@@ -221,31 +167,6 @@ fun SettingsScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showResetDialog = false }) {
-                        Text("Cancel")
-                    }
-                }
-            )
-        }
-
-        if (showSignOutDialog) {
-            AlertDialog(
-                onDismissRequest = { showSignOutDialog = false },
-                title = { Text("Sign Out Confirmation") },
-                text = { Text("Are you sure you want to log out? This will preserve your offline pantry state safely.") },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            showSignOutDialog = false
-                            viewModel.signOut()
-                            Toast.makeText(context, "Signed out successfully.", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = SoftCoralError)
-                    ) {
-                        Text("Sign Out", color = Color.White)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showSignOutDialog = false }) {
                         Text("Cancel")
                     }
                 }

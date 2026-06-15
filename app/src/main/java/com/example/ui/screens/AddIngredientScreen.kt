@@ -402,7 +402,7 @@ fun AddIngredientScreen(
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
-                    placeholder = { Text("e.g. Bought from Trader Joe's") },
+                    placeholder = { Text("Optional: brand, storage notes, or meal plan") },
                     minLines = 2,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = inputBgColor,

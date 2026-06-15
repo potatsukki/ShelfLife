@@ -27,7 +27,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Keyboard
@@ -74,7 +73,7 @@ import com.example.ui.viewmodel.ShelfLifeViewModel
 @Composable
 fun ScannerScreen(
     viewModel: ShelfLifeViewModel,
-    onNavigateToAddManual: () -> Unit
+    onNavigateToAddManual: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val isDark = MaterialTheme.colorScheme.isDark
@@ -132,18 +131,6 @@ fun ScannerScreen(
             onBarcodeChange = { manualBarcode = it },
             onLookup = { viewModel.lookupBarcode(manualBarcode) }
         )
-
-        OutlinedButton(
-            onClick = onNavigateToAddManual,
-            shape = RoundedCornerShape(18.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-        ) {
-            Icon(imageVector = Icons.Default.Add, contentDescription = null)
-            Spacer(modifier = Modifier.size(8.dp))
-            Text("Add ingredient manually", fontWeight = FontWeight.SemiBold)
-        }
     }
 }
 
@@ -297,6 +284,13 @@ private fun ProductResultCard(
                 ProductChip(Icons.Default.Inventory2, "${ingredient.quantity} ${ingredient.unit}")
             }
             ProductChip(Icons.Default.Inventory2, "${ingredient.location} until ${ingredient.expirationDate}")
+            if (ingredient.notes.isNotBlank()) {
+                Text(
+                    text = ingredient.notes,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                )
+            }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
@@ -431,7 +425,7 @@ private fun ManualBarcodeCard(
                 onValueChange = { value ->
                     onBarcodeChange(value.filter { it.isDigit() }.take(32))
                 },
-                placeholder = { Text("Example: 5449000000996") },
+                placeholder = { Text("Enter digits from the barcode, e.g. 5449000000996") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 colors = OutlinedTextFieldDefaults.colors(

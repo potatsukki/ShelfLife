@@ -17,3 +17,4 @@ local.properties
 .env
 app/google-services.json
 debug.keystore
+functions/node_modules/

@@ -285,7 +285,13 @@ class ShelfLifeViewModel(application: Application) : AndroidViewModel(applicatio
         .flatMapLatest { userId -> if (userId.isBlank()) flowOf(emptyList()) else repository.allShoppingItems(userId) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun addShoppingItem(name: String, category: String, sourceRecipeName: String? = null) {
+    fun addShoppingItem(
+        name: String,
+        category: String,
+        sourceRecipeName: String? = null,
+        quantity: Double = 1.0,
+        unit: String = "pcs"
+    ) {
         val userId = activeUserId.value
         val cleanName = name.trim()
         if (userId.isBlank() || cleanName.isBlank()) return
@@ -296,6 +302,8 @@ class ShelfLifeViewModel(application: Application) : AndroidViewModel(applicatio
                 ShoppingItem(
                     userId = userId,
                     name = cleanName,
+                    quantity = quantity,
+                    unit = unit.ifBlank { "pcs" },
                     category = category,
                     sourceRecipeName = sourceRecipeName
                 )
@@ -405,7 +413,14 @@ class ShelfLifeViewModel(application: Application) : AndroidViewModel(applicatio
             val current = _chatHistory.value + (cleanMessage to true)
             _chatHistory.value = current
             _assistantState.value = AssistantState(isLoading = true)
-            runCatching { repository.askAssistant(current.dropLast(1), cleanMessage) }
+            runCatching {
+                repository.askAssistant(
+                    chatHistory = current.dropLast(1),
+                    latestUserMessage = cleanMessage,
+                    recipeContext = selectedRecipe.value?.toRecipeContext(ingredients.value),
+                    pantryIngredients = ingredients.value
+                )
+            }
                 .onSuccess { reply ->
                     _chatHistory.value = _chatHistory.value + (reply to false)
                     _assistantState.value = AssistantState()
@@ -542,4 +557,55 @@ class ShelfLifeViewModel(application: Application) : AndroidViewModel(applicatio
             addOnSuccessListener { continuation.resume(it) }
             addOnFailureListener { continuation.resumeWithException(it) }
         }
+
+    private fun SavedRecipe.toRecipeContext(pantry: List<Ingredient>): RecipeContext {
+        val split = splitRecipeIngredients(this, pantry)
+        return RecipeContext(
+            recipeName = name,
+            availableIngredients = split.available.map { it.displayText },
+            missingIngredients = split.missing.map { it.displayText },
+            steps = recipeSteps()
+        )
+    }
+}
+
+data class RecipeIngredientSplit(
+    val available: List<RecipeIngredient>,
+    val missing: List<RecipeIngredient>
+)
+
+fun splitRecipeIngredients(recipe: SavedRecipe, pantry: List<Ingredient>): RecipeIngredientSplit {
+    val recipeIngredients = recipe.recipeIngredients()
+    val pantryNames = pantry.map { normalizeIngredientName(it.name) }.filter { it.isNotBlank() }
+    val available = mutableListOf<RecipeIngredient>()
+    val missing = mutableListOf<RecipeIngredient>()
+
+    recipeIngredients.forEach { ingredient ->
+        val normalized = normalizeIngredientName(ingredient.name)
+        val matched = pantryNames.any { pantryName ->
+            pantryName == normalized ||
+                (normalized.length >= 4 && pantryName.contains(normalized)) ||
+                (pantryName.length >= 4 && normalized.contains(pantryName))
+        }
+        if (matched) available += ingredient else missing += ingredient
+    }
+    return RecipeIngredientSplit(available = available, missing = missing)
+}
+
+fun normalizeIngredientName(value: String): String {
+    return value
+        .lowercase(Locale.US)
+        .replace(Regex("""[^\p{L}\p{N}\s]"""), " ")
+        .split(Regex("""\s+"""))
+        .filterNot { it in setOf("fresh", "dried", "chopped", "sliced", "minced", "optional") }
+        .map { token ->
+            when {
+                token.endsWith("ies") && token.length > 4 -> token.dropLast(3) + "y"
+                token.endsWith("es") && token.length > 4 && !token.endsWith("ese") -> token.dropLast(2)
+                token.endsWith("s") && token.length > 3 && !token.endsWith("ss") -> token.dropLast(1)
+                else -> token
+            }
+        }
+        .joinToString(" ")
+        .trim()
 }

@@ -93,7 +93,8 @@ object ProductLookupHelper {
                     unit = unit,
                     expirationDate = ProductDates.offsetDate(10),
                     purchaseDate = ProductDates.offsetDate(0),
-                    location = mapCategoryToLocation(category)
+                    location = mapCategoryToLocation(category),
+                    notes = "Expiration date estimated. Review before adding."
                 )
             }
         } catch (e: Exception) {

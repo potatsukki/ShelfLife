@@ -70,7 +70,7 @@ fun PantryScreen(
                         }
                     }
                 },
-                placeholder = { Text("Search ingredients...") },
+                placeholder = { Text("Search rice, eggs, milk...") },
                 singleLine = true,
                 maxLines = 1,
                 colors = OutlinedTextFieldDefaults.colors(

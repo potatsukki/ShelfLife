@@ -24,34 +24,33 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.SavedRecipe
+import com.example.data.recipeSteps
 import com.example.ui.components.ShelfLifeAsyncImage
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ShelfLifeViewModel
+import com.example.ui.viewmodel.splitRecipeIngredients
 
 @Composable
 fun RecipeDetailScreen(
     viewModel: ShelfLifeViewModel,
     recipe: SavedRecipe,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onStartCooking: () -> Unit = {}
 ) {
     val isDark = MaterialTheme.colorScheme.isDark
     val context = LocalContext.current
     val isSaved by viewModel.isRecipeSaved(recipe.id).collectAsState(initial = false)
+    val pantryIngredients by viewModel.ingredients.collectAsState()
 
-    // Parse ingredients: In Pantry vs Missing
-    val ingredientsList = remember(recipe) {
-        recipe.ingredientsCsv.split(",").map { it.trim() }.filter { it.isNotBlank() }
+    val ingredientSplit = remember(recipe, pantryIngredients) {
+        splitRecipeIngredients(recipe, pantryIngredients)
     }
-    val inPantry = remember(ingredientsList) {
-        ingredientsList.filter { !it.contains("Missing", ignoreCase = true) }
-    }
-    val missing = remember(ingredientsList) {
-        ingredientsList.filter { it.contains("Missing", ignoreCase = true) }
-    }
+    val inPantry = ingredientSplit.available
+    val missing = ingredientSplit.missing
 
     // Parse steps
     val stepsList = remember(recipe) {
-        recipe.stepsCsv.split("|").map { it.trim() }.filter { it.isNotBlank() }
+        recipe.recipeSteps()
     }
 
     Scaffold(
@@ -141,6 +140,13 @@ fun RecipeDetailScreen(
                     color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText,
                     modifier = Modifier.padding(vertical = 4.dp)
                 )
+                if (recipe.imageProvider.isNotBlank() && recipe.photographerName.isNotBlank()) {
+                    Text(
+                        text = "Photo by ${recipe.photographerName} on ${recipe.imageProvider}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -171,7 +177,7 @@ fun RecipeDetailScreen(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = SageGreen, modifier = Modifier.size(18.dp))
-                                Text("In Pantry (${inPantry.size})", style = MaterialTheme.typography.labelSmall, color = SageGreen, fontWeight = FontWeight.Bold)
+                                Text("Available (${inPantry.size})", style = MaterialTheme.typography.labelSmall, color = SageGreen, fontWeight = FontWeight.Bold)
                             }
                             Spacer(modifier = Modifier.height(10.dp))
                             if (inPantry.isEmpty()) {
@@ -179,7 +185,7 @@ fun RecipeDetailScreen(
                             } else {
                                 inPantry.forEach { item ->
                                     Text(
-                                        text = "• ${item.replace("- have", "").trim()}",
+                                        text = "• ${item.displayText}",
                                         style = MaterialTheme.typography.bodySmall,
                                         modifier = Modifier.padding(vertical = 4.dp)
                                     )
@@ -208,7 +214,7 @@ fun RecipeDetailScreen(
                             } else {
                                 missing.forEach { item ->
                                     Text(
-                                        text = "• ${item.replace("- Missing", "").trim()}",
+                                        text = "• ${item.displayText}",
                                         style = MaterialTheme.typography.bodySmall,
                                         modifier = Modifier.padding(vertical = 4.dp),
                                         color = SoftCoralError
@@ -225,11 +231,12 @@ fun RecipeDetailScreen(
                     Button(
                         onClick = {
                             missing.forEach { item ->
-                                val cleanName = item.replace("- Missing", "").trim()
                                 viewModel.addShoppingItem(
-                                    name = cleanName,
+                                    name = item.name,
                                     category = "Missing for Recipes",
-                                    sourceRecipeName = recipe.name
+                                    sourceRecipeName = recipe.name,
+                                    quantity = item.quantity ?: 1.0,
+                                    unit = item.unit.ifBlank { "pcs" }
                                 )
                             }
                             Toast.makeText(context, "Added ${missing.size} items to shopping list!", Toast.LENGTH_SHORT).show()
@@ -294,15 +301,12 @@ fun RecipeDetailScreen(
 
                 // Start Cook Button
                 Button(
-                    onClick = {
-                        Toast.makeText(context, "Started ${recipe.name}.", Toast.LENGTH_LONG).show()
-                        onBack()
-                    },
+                    onClick = onStartCooking,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     shape = CircleShape,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Start Cooking Today", color = Color.White, style = MaterialTheme.typography.labelLarge)
+                    Text("Start Guided Cooking", color = Color.White, style = MaterialTheme.typography.labelLarge)
                 }
             }
         }

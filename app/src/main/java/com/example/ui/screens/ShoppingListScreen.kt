@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -66,9 +67,11 @@ fun ShoppingListScreen(viewModel: ShelfLifeViewModel) {
                 )
 
                 if (items.any { it.isChecked }) {
-                    TextButton(
-                        onClick = { showClearCheckedDialog = true },
-                        colors = ButtonDefaults.textButtonColors(contentColor = SoftCoralError)
+                TextButton(
+                    onClick = { showClearCheckedDialog = true },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = if (isDark) MaterialTheme.colorScheme.error else SoftCoralError
+                    )
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -213,7 +216,7 @@ fun ShoppingItemRow(
     onDelete: () -> Unit
 ) {
     val isDark = MaterialTheme.colorScheme.isDark
-    val cardBgColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White
+    val cardBgColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White
 
     Card(
         colors = CardDefaults.cardColors(containerColor = cardBgColor),
@@ -240,8 +243,9 @@ fun ShoppingItemRow(
                         .clip(CircleShape)
                         .background(
                             if (item.isChecked) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceVariant
+                            else if (isDark) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surfaceVariant
                         )
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
                         .clickable { onCheckedChange() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -278,7 +282,11 @@ fun ShoppingItemRow(
             }
 
             IconButton(onClick = onDelete) {
-                Icon(imageVector = Icons.Default.DeleteOutline, contentDescription = "Delete item", tint = SoftCoralError)
+                Icon(
+                    imageVector = Icons.Default.DeleteOutline,
+                    contentDescription = "Delete item",
+                    tint = if (isDark) MaterialTheme.colorScheme.error else SoftCoralError
+                )
             }
         }
     }

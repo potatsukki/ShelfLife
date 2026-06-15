@@ -38,17 +38,27 @@ fun ChatScreen(
     val isDark = MaterialTheme.colorScheme.isDark
     val chatHistory by viewModel.chatHistory.collectAsState()
     val loading by viewModel.chatLoading.collectAsState()
+    val selectedRecipe by viewModel.selectedRecipe.collectAsState()
 
     var activeInput by remember { mutableStateOf("") }
     val lazyListState = rememberLazyListState()
 
     // Helper options
-    val templates = listOf(
-        "Substitute eggs in baking?",
-        "How to use up expiring spinach?",
-        "Fast recipe with rice & chicken?",
-        "Substitutions for soy sauce?"
-    )
+    val templates = if (selectedRecipe != null) {
+        listOf(
+            "Can I make this cheaper?",
+            "What can replace the main protein?",
+            "How do I make this vegetarian?",
+            "Which ingredients can I skip?"
+        )
+    } else {
+        listOf(
+            "Substitute eggs in baking?",
+            "How to use expiring produce?",
+            "Fast recipe with rice and chicken?",
+            "Substitutions for soy sauce?"
+        )
+    }
 
     // Auto scroll to bottom when history length changes
     LaunchedEffect(chatHistory.size) {
@@ -111,7 +121,8 @@ fun ChatScreen(
                 ) {
                     Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
                     Text(
-                        text = "Ask anything about substitutes, meal prep, or reducing kitchen waste!",
+                        text = selectedRecipe?.let { "Ask about ${it.name}, substitutions, or changes." }
+                            ?: "Ask anything about substitutes, meal prep, or reducing kitchen waste!",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
@@ -185,7 +196,12 @@ fun ChatScreen(
                 OutlinedTextField(
                     value = activeInput,
                     onValueChange = { activeInput = it },
-                    placeholder = { Text("Ask Kitchen AI...") },
+                    placeholder = {
+                        Text(
+                            selectedRecipe?.let { "Ask about this recipe or ingredient substitutions" }
+                                ?: "Ask Kitchen AI about pantry planning..."
+                        )
+                    },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = MaterialTheme.colorScheme.background,
                         unfocusedContainerColor = MaterialTheme.colorScheme.background,

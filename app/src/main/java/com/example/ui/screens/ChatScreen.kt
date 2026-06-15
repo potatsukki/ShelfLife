@@ -16,7 +16,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,7 +26,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.*
@@ -138,8 +145,16 @@ fun ChatScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(chatHistory) { (message, isUser) ->
-                    ChatBubble(message = message, isUser = isUser)
+                items(chatHistory, key = { it.id }) { message ->
+                    ChatBubble(
+                        message = message.text,
+                        isUser = message.isUser,
+                        recipeUpdateSummary = message.recipeUpdate?.summary,
+                        isApplied = message.isApplied,
+                        onApplyRecipeUpdate = message.recipeUpdate?.let {
+                            { viewModel.applyRecipeUpdate(message.id) }
+                        }
+                    )
                 }
 
                 if (loading) {
@@ -242,8 +257,15 @@ fun ChatScreen(
 }
 
 @Composable
-fun ChatBubble(message: String, isUser: Boolean) {
+fun ChatBubble(
+    message: String,
+    isUser: Boolean,
+    recipeUpdateSummary: String? = null,
+    isApplied: Boolean = false,
+    onApplyRecipeUpdate: (() -> Unit)? = null
+) {
     val isDark = MaterialTheme.colorScheme.isDark
+
     val bubbleBgColor = if (isUser) {
         if (isDark) MaterialTheme.colorScheme.primaryContainer else DeepWalnutText
     } else {
@@ -280,24 +302,118 @@ fun ChatBubble(message: String, isUser: Boolean) {
             }
 
             // Bubble body
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = bubbleBgColor
-                ),
-                shape = RoundedCornerShape(
-                    topStart = if (isUser) 16.dp else 4.dp,
-                    topEnd = if (isUser) 4.dp else 16.dp,
-                    bottomStart = 16.dp,
-                    bottomEnd = 16.dp
-                )
+            Column(
+                horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = bubbleTextColor,
-                    modifier = Modifier.padding(12.dp)
-                )
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = bubbleBgColor
+                    ),
+                    shape = RoundedCornerShape(
+                        topStart = if (isUser) 16.dp else 4.dp,
+                        topEnd = if (isUser) 4.dp else 16.dp,
+                        bottomStart = 16.dp,
+                        bottomEnd = 16.dp
+                    )
+                ) {
+                    if (isUser) {
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = bubbleTextColor,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    } else {
+                        MarkdownText(
+                            text = message,
+                            color = bubbleTextColor,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                }
+
+                if (!isUser && recipeUpdateSummary != null && onApplyRecipeUpdate != null) {
+                    Text(
+                        text = recipeUpdateSummary,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 6.dp)
+                    )
+                    Button(
+                        onClick = onApplyRecipeUpdate,
+                        enabled = !isApplied,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(start = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isApplied) Icons.Default.Check else Icons.Default.SwapHoriz,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            if (isApplied) "Applied to recipe" else "Use these ingredients",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+fun MarkdownText(text: String, color: Color, modifier: Modifier = Modifier) {
+    val annotatedString = buildAnnotatedString {
+        val lines = text.split("\n")
+        lines.forEachIndexed { index, line ->
+            var currentLine = line
+            
+            // Handle Headers (###)
+            val isHeader = currentLine.startsWith("###")
+            if (isHeader) {
+                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, fontSize = 16.sp)) {
+                    append(currentLine.replace("###", "").trim())
+                }
+            } else {
+                // Handle Lists (-)
+                if (currentLine.trim().startsWith("-")) {
+                    append("• ")
+                    currentLine = currentLine.trim().substring(1).trim()
+                }
+                
+                // Handle Bold (**)
+                var lastIndex = 0
+                val boldRegex = Regex("""\*\*(.*?)\*\*""")
+                val matches = boldRegex.findAll(currentLine)
+                
+                matches.forEach { match ->
+                    append(currentLine.substring(lastIndex, match.range.first))
+                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                        append(match.groupValues[1])
+                    }
+                    lastIndex = match.range.last + 1
+                }
+                append(currentLine.substring(lastIndex))
+            }
+            
+            if (index < lines.size - 1) {
+                append("\n")
+            }
+        }
+    }
+
+    Text(
+        text = annotatedString,
+        style = MaterialTheme.typography.bodyMedium,
+        color = color,
+        lineHeight = 22.sp,
+        modifier = modifier
+    )
 }

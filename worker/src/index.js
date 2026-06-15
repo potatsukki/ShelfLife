@@ -49,7 +49,7 @@ async function generateRecipes(body, env) {
 
   const prompt = `Generate 2 practical recipes for this pantry:\n${pantryText}\n\nReturn raw JSON only with this exact shape: {"recipes":[{"id":"stable_slug","name":"Recipe Name","prepTime":"20 min","difficulty":"Easy","whySuggested":"short pantry-based reason","ingredients":[{"name":"Ingredient","quantity":1,"unit":"cup","required":true}],"steps":[{"text":"Step one"}]}]}. Use pantry items first. Mark ingredients the user does not have as required true; do not claim missing ingredients are available.`;
 
-  const content = await callOpenRouter(env, [
+  const content = await callDeepSeek(env, [
     {
       role: "system",
       content: "You are ShelfLife's recipe engine. Return valid JSON only. Prefer recipes that reduce food waste and use pantry items first."
@@ -104,7 +104,9 @@ async function chatAssistant(body, env) {
   const messages = [
     {
       role: "system",
-      content: `You are Kitchen AI inside ShelfLife. Give concise, practical cooking and pantry answers. Current pantry: ${pantryText}. ${contextText} If data is uncertain, say so.`
+      content: recipeContext
+        ? `You are Kitchen AI inside ShelfLife. Answer specifically about the selected recipe. When the user requests cheaper ingredients, substitutions, vegetarian changes, removals, or another recipe modification, return JSON only with this shape: {"reply":"clear explanation","recipeUpdate":{"summary":"short description","ingredients":[{"name":"ingredient","quantity":1,"unit":"cup","required":true}],"steps":[{"text":"updated step"}]}}. recipeUpdate must contain the complete revised recipe, not only changed items. If no recipe change is requested, set recipeUpdate to null. Current pantry: ${pantryText}. ${contextText}`
+        : `You are Kitchen AI inside ShelfLife. Give concise, practical cooking and pantry answers. Current pantry: ${pantryText}. If data is uncertain, say so.`
     },
     ...history.map((item) => ({
       role: item.role === "assistant" ? "assistant" : "user",
@@ -113,8 +115,21 @@ async function chatAssistant(body, env) {
     { role: "user", content: String(body.message || "").slice(0, 2000) }
   ];
 
-  const reply = await callOpenRouter(env, messages, false);
-  return { reply };
+  if (!recipeContext) {
+    const reply = await callDeepSeek(env, messages, false);
+    return { reply };
+  }
+
+  const content = await callDeepSeek(env, messages, true);
+  try {
+    const parsed = parseJson(content);
+    return {
+      reply: stringOr(parsed.reply, "I prepared an updated version of this recipe."),
+      recipeUpdate: normalizeRecipeUpdate(parsed.recipeUpdate)
+    };
+  } catch (_) {
+    return { reply: content, recipeUpdate: null };
+  }
 }
 
 async function identifyBarcodeFallback(body, env) {
@@ -123,7 +138,7 @@ async function identifyBarcodeFallback(body, env) {
     return { error: "Barcode is required." };
   }
 
-  const content = await callOpenRouter(env, [
+  const content = await callDeepSeek(env, [
     {
       role: "system",
       content: "You identify grocery products from barcodes. Return valid JSON only. If uncertain, use a conservative generic grocery name and note that it needs review."
@@ -191,30 +206,35 @@ async function requireFirebaseUser(request, env) {
   return payload;
 }
 
-async function callOpenRouter(env, messages, jsonMode) {
-  if (!env.OPENROUTER_API_KEY) {
-    throw new Error("OPENROUTER_API_KEY is not configured in Cloudflare Worker secrets.");
+async function callDeepSeek(env, messages, jsonMode) {
+  if (!env.DEEPSEEK_API_KEY) {
+    throw new Error("DEEPSEEK_API_KEY is not configured in Cloudflare Worker secrets.");
   }
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
-      "http-referer": "https://github.com/potatsukki/ShelfLife",
-      "x-title": "ShelfLife"
+      "authorization": `Bearer ${env.DEEPSEEK_API_KEY}`
     },
     body: JSON.stringify({
-      model: env.OPENROUTER_MODEL || "openrouter/free",
+      model: env.DEEPSEEK_MODEL || "deepseek-v4-flash",
       messages,
-      temperature: jsonMode ? 0.2 : 0.7,
+      thinking: { type: "disabled" },
+      max_tokens: jsonMode ? 1800 : 1200,
       response_format: jsonMode ? { type: "json_object" } : undefined
     })
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`OpenRouter request failed (${response.status}): ${text.slice(0, 240)}`);
+    if (response.status === 402) {
+      throw new Error("DeepSeek account balance is insufficient.");
+    }
+    if (response.status === 429) {
+      throw new Error("DeepSeek rate limit reached. Try again shortly.");
+    }
+    throw new Error(`DeepSeek request failed (${response.status}): ${text.slice(0, 240)}`);
   }
 
   const data = await response.json();
@@ -292,6 +312,18 @@ function normalizeStepObjects(value, fallbackCsv) {
     .map((step) => step.replace(/^\d+[\).]\s*/, "").trim())
     .filter(Boolean)
     .map((text) => ({ text }));
+}
+
+function normalizeRecipeUpdate(update) {
+  if (!update || typeof update !== "object") return null;
+  const ingredients = normalizeIngredients(update.ingredients, "");
+  const steps = normalizeStepObjects(update.steps, "");
+  if (ingredients.length === 0 || steps.length === 0) return null;
+  return {
+    summary: stringOr(update.summary, "Apply the suggested ingredient changes"),
+    ingredients,
+    steps
+  };
 }
 
 function decodeBase64Url(value) {

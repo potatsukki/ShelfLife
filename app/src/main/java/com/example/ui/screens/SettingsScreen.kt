@@ -93,7 +93,7 @@ fun SettingsScreen(
         )
         SettingsToggleRow(
             label = "Smart Recipe Suggestions",
-            description = "Enable real-time OpenRouter recipe ideas",
+            description = "Enable real-time DeepSeek recipe ideas",
             isChecked = settings.smartRecipeIdeas,
             onCheckedChange = { viewModel.setSmartRecipeIdeas(it) },
             icon = Icons.Default.AutoAwesome

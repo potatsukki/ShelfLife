@@ -14,6 +14,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -25,6 +27,14 @@ data class RecipeGenerationState(
 data class AssistantState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null
+)
+
+data class ChatMessage(
+    val id: Long = System.nanoTime(),
+    val text: String,
+    val isUser: Boolean,
+    val recipeUpdate: RecipeUpdateSuggestion? = null,
+    val isApplied: Boolean = false
 )
 
 data class ScannerUiState(
@@ -397,8 +407,8 @@ class ShelfLifeViewModel(application: Application) : AndroidViewModel(applicatio
         return if (userId.isBlank()) flowOf(false) else repository.isRecipeSavedFlow(id, userId)
     }
 
-    private val _chatHistory = MutableStateFlow<List<Pair<String, Boolean>>>(emptyList())
-    val chatHistory: StateFlow<List<Pair<String, Boolean>>> = _chatHistory.asStateFlow()
+    private val _chatHistory = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val chatHistory: StateFlow<List<ChatMessage>> = _chatHistory.asStateFlow()
 
     private val _assistantState = MutableStateFlow(AssistantState())
     val assistantState: StateFlow<AssistantState> = _assistantState.asStateFlow()
@@ -410,27 +420,69 @@ class ShelfLifeViewModel(application: Application) : AndroidViewModel(applicatio
         val cleanMessage = message.trim()
         if (cleanMessage.isBlank()) return
         viewModelScope.launch {
-            val current = _chatHistory.value + (cleanMessage to true)
+            val current = _chatHistory.value + ChatMessage(text = cleanMessage, isUser = true)
             _chatHistory.value = current
             _assistantState.value = AssistantState(isLoading = true)
+
             runCatching {
                 repository.askAssistant(
-                    chatHistory = current.dropLast(1),
+                    chatHistory = current.dropLast(1).map { it.text to it.isUser },
                     latestUserMessage = cleanMessage,
                     recipeContext = selectedRecipe.value?.toRecipeContext(ingredients.value),
                     pantryIngredients = ingredients.value
                 )
             }
                 .onSuccess { reply ->
-                    _chatHistory.value = _chatHistory.value + (reply to false)
+                    _chatHistory.value = _chatHistory.value + ChatMessage(
+                        text = reply.message,
+                        isUser = false,
+                        recipeUpdate = reply.recipeUpdate
+                    )
                     _assistantState.value = AssistantState()
                 }
                 .onFailure { error ->
                     _assistantState.value = AssistantState(
                         errorMessage = error.localizedMessage ?: "Kitchen AI is unavailable right now."
                     )
-                    _chatHistory.value = _chatHistory.value + ("Kitchen AI is unavailable right now. Check your Cloudflare Worker setup and try again." to false)
+                    _chatHistory.value = _chatHistory.value + ChatMessage(
+                        text = "Kitchen AI is unavailable right now. Check your Cloudflare Worker setup and try again.",
+                        isUser = false
+                    )
                 }
+        }
+    }
+
+    fun applyRecipeUpdate(messageId: Long) {
+        val message = _chatHistory.value.firstOrNull { it.id == messageId } ?: return
+        val update = message.recipeUpdate ?: return
+        val currentRecipe = _selectedRecipe.value ?: return
+        val updatedRecipe = currentRecipe.copy(
+            ingredientsCsv = update.ingredients.joinToString(", ") { it.displayText },
+            stepsCsv = update.steps.joinToString("|"),
+            ingredientsJson = JSONArray(update.ingredients.map {
+                JSONObject()
+                    .put("name", it.name)
+                    .put("quantity", it.quantity ?: JSONObject.NULL)
+                    .put("unit", it.unit)
+                    .put("required", it.required)
+            }).toString(),
+            stepsJson = JSONArray(update.steps.map { JSONObject().put("text", it) }).toString(),
+            whySuggested = update.summary.ifBlank { currentRecipe.whySuggested }
+        )
+        _selectedRecipe.value = updatedRecipe
+        _suggestedRecipes.value = _suggestedRecipes.value.map {
+            if (it.id == updatedRecipe.id) updatedRecipe else it
+        }
+        _chatHistory.value = _chatHistory.value.map {
+            if (it.id == messageId) it.copy(isApplied = true) else it
+        }
+        val userId = activeUserId.value
+        if (userId.isNotBlank()) {
+            viewModelScope.launch {
+                if (repository.isRecipeSavedSync(updatedRecipe.id, userId)) {
+                    repository.insertSavedRecipe(updatedRecipe.copy(userId = userId))
+                }
+            }
         }
     }
 

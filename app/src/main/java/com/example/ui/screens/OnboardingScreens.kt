@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,10 +24,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ShelfLifeViewModel
 
@@ -59,31 +62,14 @@ fun SplashScreen(viewModel: ShelfLifeViewModel) {
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.padding(24.dp)
         ) {
-            // App Logo Box
-            Box(
+            // App Logo
+            Image(
+                painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                contentDescription = "ShelfLife Logo",
                 modifier = Modifier
-                    .size(140.dp)
+                    .size(160.dp)
                     .clip(RoundedCornerShape(32.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ShoppingBasket,
-                    contentDescription = "ShelfLife Logo",
-                    tint = OnMintContainer,
-                    modifier = Modifier.size(70.dp)
-                )
-                // Small Leaf Accent
-                Icon(
-                    imageVector = Icons.Default.Eco,
-                    contentDescription = null,
-                    tint = SageGreen,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .align(Alignment.BottomEnd)
-                        .padding(bottom = 12.dp, end = 12.dp)
-                )
-            }
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 

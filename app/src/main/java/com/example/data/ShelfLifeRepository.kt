@@ -74,7 +74,7 @@ class ShelfLifeRepository(
         latestUserMessage: String,
         recipeContext: RecipeContext?,
         pantryIngredients: List<Ingredient>
-    ): String =
+    ): AssistantReply =
         withContext(Dispatchers.IO) {
             aiService.askAssistant(chatHistory, latestUserMessage, recipeContext, pantryIngredients)
         }

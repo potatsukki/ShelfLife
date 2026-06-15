@@ -88,7 +88,7 @@ fun ChatScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "Powered by OpenRouter",
+                        text = "Powered by ShelfLife AI",
                         style = MaterialTheme.typography.labelSmall,
                         color = if (isDark) MaterialTheme.colorScheme.primary else SageGreen,
                         fontSize = 10.sp

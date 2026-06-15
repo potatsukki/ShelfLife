@@ -429,7 +429,7 @@ class ShelfLifeViewModel(application: Application) : AndroidViewModel(applicatio
                     _assistantState.value = AssistantState(
                         errorMessage = error.localizedMessage ?: "Kitchen AI is unavailable right now."
                     )
-                    _chatHistory.value = _chatHistory.value + ("Kitchen AI is unavailable right now. Check your Firebase Functions setup and try again." to false)
+                    _chatHistory.value = _chatHistory.value + ("Kitchen AI is unavailable right now. Check your Cloudflare Worker setup and try again." to false)
                 }
         }
     }

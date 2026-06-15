@@ -1,0 +1,7 @@
+name = "shelflife-api"
+main = "src/index.js"
+compatibility_date = "2026-06-15"
+
+[vars]
+FIREBASE_PROJECT_ID = "shelflife-520ba"
+OPENROUTER_MODEL = "openrouter/free"

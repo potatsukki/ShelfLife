@@ -92,7 +92,6 @@ roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "robora
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-ai = { group = "com.google.firebase", name = "firebase-ai" }
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
-firebase-functions = { group = "com.google.firebase", name = "firebase-functions" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashScreen" }
 
 [plugins]

@@ -1,8 +1,17 @@
 package com.example.data
 
-import com.google.firebase.functions.FirebaseFunctions
+import com.example.BuildConfig
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GetTokenResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -15,63 +24,41 @@ data class RecipeContext(
     val steps: List<String>
 )
 
-class ShelfLifeAiService {
-    private val functions: FirebaseFunctions? = runCatching { FirebaseFunctions.getInstance() }.getOrNull()
+class ShelfLifeAiService(
+    private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance()
+) {
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(45, TimeUnit.SECONDS)
+        .readTimeout(45, TimeUnit.SECONDS)
+        .writeTimeout(45, TimeUnit.SECONDS)
+        .build()
 
     suspend fun generateRecipes(ingredients: List<Ingredient>): List<SavedRecipe> {
-        val callable = functions ?: throw AiUnavailableException("Firebase Functions is not configured.")
-        val payload = mapOf(
-            "ingredients" to ingredients.map {
-                mapOf(
-                    "name" to it.name,
-                    "quantity" to it.quantity,
-                    "unit" to it.unit,
-                    "category" to it.category,
-                    "location" to it.location,
-                    "expirationDate" to it.expirationDate
-                )
-            }
-        )
-        val result = callable.getHttpsCallable("generateRecipes").callAwait(payload)
-        val data = result.data
-        val recipes = when (data) {
-            is List<*> -> data
-            is Map<*, *> -> data["recipes"] as? List<*> ?: emptyList<Any>()
-            else -> emptyList<Any>()
-        }
-        return recipes.mapIndexedNotNull { index, item ->
-            val obj = item as? Map<*, *> ?: return@mapIndexedNotNull null
-            val name = obj.string("name").ifBlank { "Recipe ${index + 1}" }
-            val ingredientsList = obj.list("ingredients")
-            val stepsList = obj.list("steps")
+        val payload = JSONObject()
+            .put("ingredients", JSONArray(ingredients.map { it.toJson() }))
+        val data = post("generateRecipes", payload)
+        val recipes = data.optJSONArray("recipes") ?: JSONArray()
+        return (0 until recipes.length()).mapNotNull { index ->
+            val obj = recipes.optJSONObject(index) ?: return@mapNotNull null
+            val name = obj.optString("name").ifBlank { "Recipe ${index + 1}" }
+            val ingredientsList = obj.optJSONArray("ingredients") ?: JSONArray()
+            val stepsList = obj.optJSONArray("steps") ?: JSONArray()
             SavedRecipe(
-                id = obj.string("id").ifBlank { "ai_${System.currentTimeMillis()}_$index" },
+                id = obj.optString("id").ifBlank { "ai_${System.currentTimeMillis()}_$index" },
                 userId = "",
                 name = name,
-                prepTime = obj.string("prepTime").ifBlank { "25 min" },
-                difficulty = obj.string("difficulty").ifBlank { "Medium" },
-                imageResUrl = obj.string("imageUrl").ifBlank { obj.string("imageResUrl") },
-                whySuggested = obj.string("whySuggested").ifBlank { "Based on your pantry" },
-                ingredientsCsv = ingredientsList.joinToString(", ") { ingredient ->
-                    (ingredient as? Map<*, *>)?.string("name").orEmpty()
-                }.ifBlank { obj.string("ingredientsCsv") },
-                stepsCsv = stepsList.joinToString("|") { step ->
-                    when (step) {
-                        is Map<*, *> -> step.string("text")
-                        else -> step?.toString().orEmpty()
-                    }
-                }.ifBlank { obj.string("stepsCsv") },
-                imageProvider = obj.string("imageProvider"),
-                photographerName = obj.string("photographerName"),
-                photographerUrl = obj.string("photographerUrl"),
-                photoPageUrl = obj.string("photoPageUrl"),
-                ingredientsJson = JSONArray(ingredientsList).toString(),
-                stepsJson = JSONArray(stepsList.map { step ->
-                    when (step) {
-                        is Map<*, *> -> step
-                        else -> mapOf("text" to step.toString())
-                    }
-                }).toString()
+                prepTime = obj.optString("prepTime").ifBlank { "25 min" },
+                difficulty = obj.optString("difficulty").ifBlank { "Medium" },
+                imageResUrl = obj.optString("imageUrl").ifBlank { obj.optString("imageResUrl") },
+                whySuggested = obj.optString("whySuggested").ifBlank { "Based on your pantry" },
+                ingredientsCsv = ingredientsList.joinNames().ifBlank { obj.optString("ingredientsCsv") },
+                stepsCsv = stepsList.joinSteps().ifBlank { obj.optString("stepsCsv") },
+                imageProvider = obj.optString("imageProvider"),
+                photographerName = obj.optString("photographerName"),
+                photographerUrl = obj.optString("photographerUrl"),
+                photoPageUrl = obj.optString("photoPageUrl"),
+                ingredientsJson = if (ingredientsList.length() > 0) ingredientsList.toString() else obj.optString("ingredientsJson"),
+                stepsJson = if (stepsList.length() > 0) stepsList.toString() else obj.optString("stepsJson")
             )
         }
     }
@@ -82,67 +69,113 @@ class ShelfLifeAiService {
         recipeContext: RecipeContext? = null,
         pantryIngredients: List<Ingredient> = emptyList()
     ): String {
-        val callable = functions ?: throw AiUnavailableException("Firebase Functions is not configured.")
-        val payload = mapOf(
-            "message" to latestUserMessage,
-            "history" to chatHistory.map {
-                mapOf("role" to if (it.second) "user" else "assistant", "content" to it.first)
-            },
-            "recipeContext" to recipeContext?.let {
-                mapOf(
-                    "recipeName" to it.recipeName,
-                    "availableIngredients" to it.availableIngredients,
-                    "missingIngredients" to it.missingIngredients,
-                    "steps" to it.steps
-                )
-            },
-            "pantry" to pantryIngredients.map {
-                mapOf("name" to it.name, "quantity" to it.quantity, "unit" to it.unit)
-            }
-        )
-        val result = callable.getHttpsCallable("chatAssistant").callAwait(payload)
-        val data = result.data
-        return (data as? Map<*, *>)?.string("reply")
-            ?: throw AiUnavailableException("Kitchen AI returned an empty response.")
+        val payload = JSONObject()
+            .put("message", latestUserMessage)
+            .put(
+                "history",
+                JSONArray(chatHistory.map {
+                    JSONObject()
+                        .put("role", if (it.second) "user" else "assistant")
+                        .put("content", it.first)
+                })
+            )
+            .put("recipeContext", recipeContext?.toJson())
+            .put("pantry", JSONArray(pantryIngredients.map { it.toJson() }))
+
+        return post("chatAssistant", payload)
+            .optString("reply")
+            .ifBlank { throw AiUnavailableException("Kitchen AI returned an empty response.") }
     }
 
     suspend fun identifyBarcodeFallback(barcode: String): Ingredient? {
-        val callable = functions ?: throw AiUnavailableException("Firebase Functions is not configured.")
-        val result = callable.getHttpsCallable("identifyBarcodeFallback").callAwait(mapOf("barcode" to barcode))
-        val data = result.data as? Map<*, *> ?: return null
-        val name = data.string("name").trim()
+        val data = post("identifyBarcodeFallback", JSONObject().put("barcode", barcode))
+        val name = data.optString("name").trim()
         if (name.isBlank()) return null
         return Ingredient(
             userId = "",
             name = name,
-            category = data.string("category").ifBlank { "Pantry" },
-            quantity = data.double("quantity") ?: 1.0,
-            unit = data.string("unit").ifBlank { "pcs" },
+            category = data.optString("category").ifBlank { "Pantry" },
+            quantity = data.optDoubleOrNull("quantity") ?: 1.0,
+            unit = data.optString("unit").ifBlank { "pcs" },
             expirationDate = ProductDates.offsetDate(10),
             purchaseDate = ProductDates.offsetDate(0),
-            location = data.string("location").ifBlank { "Pantry" },
-            notes = data.string("notes").ifBlank { "Expiration date estimated. Review before adding." }
+            location = data.optString("location").ifBlank { "Pantry" },
+            notes = data.optString("notes").ifBlank { "Expiration date estimated. Review before adding." }
         )
     }
 
-    private suspend fun com.google.firebase.functions.HttpsCallableReference.callAwait(data: Any):
-        com.google.firebase.functions.HttpsCallableResult =
+    private suspend fun post(path: String, payload: JSONObject): JSONObject {
+        val baseUrl = BuildConfig.SHELFLIFE_WORKER_BASE_URL.trim().trimEnd('/')
+        if (baseUrl.isBlank() || baseUrl.contains("replace-after-worker-deploy")) {
+            throw AiUnavailableException("Cloudflare Worker URL is not configured. Set SHELFLIFE_WORKER_BASE_URL in .env.")
+        }
+
+        val token = firebaseAuth.currentUser?.getIdToken(false)?.await()?.token
+            ?: throw AiUnavailableException("Sign in before using ShelfLife AI.")
+        val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        val request = Request.Builder()
+            .url("$baseUrl/$path")
+            .header("Authorization", "Bearer $token")
+            .post(body)
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            val text = response.body?.string().orEmpty()
+            val json = runCatching { JSONObject(text) }.getOrElse { JSONObject().put("error", text) }
+            if (!response.isSuccessful) {
+                throw AiUnavailableException(json.optString("error").ifBlank { "ShelfLife AI request failed (${response.code})." })
+            }
+            json.optString("error").takeIf { it.isNotBlank() }?.let { throw AiUnavailableException(it) }
+            return json
+        }
+    }
+
+    private suspend fun com.google.android.gms.tasks.Task<GetTokenResult>.await(): GetTokenResult =
         suspendCancellableCoroutine { continuation ->
-            call(data)
-                .addOnSuccessListener { continuation.resume(it) }
-                .addOnFailureListener { continuation.resumeWithException(it) }
+            addOnSuccessListener { continuation.resume(it) }
+            addOnFailureListener { continuation.resumeWithException(it) }
+            addOnCanceledListener { continuation.resumeWithException(CancellationException("Firebase token request was canceled.")) }
         }
 }
 
-private fun Map<*, *>.string(key: String): String = this[key]?.toString().orEmpty()
+private fun Ingredient.toJson(): JSONObject =
+    JSONObject()
+        .put("name", name)
+        .put("quantity", quantity)
+        .put("unit", unit)
+        .put("category", category)
+        .put("location", location)
+        .put("expirationDate", expirationDate)
 
-private fun Map<*, *>.double(key: String): Double? = when (val value = this[key]) {
-    is Number -> value.toDouble()
-    is String -> value.toDoubleOrNull()
-    else -> null
+private fun RecipeContext.toJson(): JSONObject =
+    JSONObject()
+        .put("recipeName", recipeName)
+        .put("availableIngredients", JSONArray(availableIngredients))
+        .put("missingIngredients", JSONArray(missingIngredients))
+        .put("steps", JSONArray(steps))
+
+private fun JSONArray.joinNames(): String =
+    (0 until length()).joinToString(", ") { index ->
+        val value = opt(index)
+        when (value) {
+            is JSONObject -> value.optString("name")
+            else -> value?.toString().orEmpty()
+        }
+    }.trim()
+
+private fun JSONArray.joinSteps(): String =
+    (0 until length()).joinToString("|") { index ->
+        val value = opt(index)
+        when (value) {
+            is JSONObject -> value.optString("text")
+            else -> value?.toString().orEmpty()
+        }
+    }.trim()
+
+private fun JSONObject.optDoubleOrNull(name: String): Double? {
+    if (!has(name) || isNull(name)) return null
+    return runCatching { getDouble(name) }.getOrNull()
 }
-
-private fun Map<*, *>.list(key: String): List<*> = this[key] as? List<*> ?: emptyList<Any>()
 
 object ProductDates {
     fun offsetDate(offsetDays: Int): String {

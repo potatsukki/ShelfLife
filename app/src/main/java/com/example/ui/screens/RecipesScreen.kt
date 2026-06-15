@@ -157,7 +157,7 @@ fun RecipesScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("Reading pantry & generating recipe ideas with OpenRouter...", color = SoftGrayText, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+                        Text("Reading pantry and generating recipe ideas...", color = SoftGrayText, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
                     }
                 }
             } else {

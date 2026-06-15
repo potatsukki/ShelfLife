@@ -18,3 +18,5 @@ local.properties
 app/google-services.json
 debug.keystore
 functions/node_modules/
+worker/node_modules/
+.wrangler/

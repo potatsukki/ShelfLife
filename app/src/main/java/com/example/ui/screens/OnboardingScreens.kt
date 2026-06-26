@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -35,6 +36,7 @@ import com.example.ui.viewmodel.ShelfLifeViewModel
 
 @Composable
 fun SplashScreen(viewModel: ShelfLifeViewModel) {
+    val isDark = MaterialTheme.colorScheme.isDark
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val alpha by infiniteTransition.animateFloat(
         initialValue = 0.3f,
@@ -64,7 +66,9 @@ fun SplashScreen(viewModel: ShelfLifeViewModel) {
         ) {
             // App Logo
             Image(
-                painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                painter = painterResource(
+                    id = if (isDark) R.drawable.onboarding_kitchen_dark else R.drawable.onboarding_kitchen
+                ),
                 contentDescription = "ShelfLife Logo",
                 modifier = Modifier
                     .size(160.dp)
@@ -85,7 +89,7 @@ fun SplashScreen(viewModel: ShelfLifeViewModel) {
             Text(
                 text = "Your smart kitchen companion.",
                 style = MaterialTheme.typography.bodyLarge,
-                color = SoftGrayText,
+                color = if (isDark) MaterialTheme.colorScheme.primary.copy(alpha = 0.9f) else SoftGrayText,
                 textAlign = TextAlign.Center
             )
         }
@@ -106,6 +110,7 @@ fun SplashScreen(viewModel: ShelfLifeViewModel) {
 
 @Composable
 fun OnboardingScreenOne(viewModel: ShelfLifeViewModel) {
+    val isDark = MaterialTheme.colorScheme.isDark
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -150,14 +155,15 @@ fun OnboardingScreenOne(viewModel: ShelfLifeViewModel) {
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
+                        .background(MaterialTheme.colorScheme.primaryContainer)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Kitchen,
+                    Image(
+                        painter = painterResource(
+                            id = if (isDark) R.drawable.onboarding_kitchen_dark else R.drawable.onboarding_kitchen
+                        ),
                         contentDescription = "Pantry organization",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(96.dp)
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
@@ -441,7 +447,7 @@ fun OnboardingScreenThree(viewModel: ShelfLifeViewModel) {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(horizontal = 24.dp)
         ) {
-            // Foreground Image card with AI Match overlay
+            // Foreground Image card
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 shape = RoundedCornerShape(24.dp),
@@ -457,19 +463,12 @@ fun OnboardingScreenThree(viewModel: ShelfLifeViewModel) {
                                 .height(160.dp)
                                 .clip(RoundedCornerShape(12.dp))
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.primaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.RestaurantMenu,
-                                    contentDescription = "Recipe idea",
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(72.dp)
-                                )
-                            }
+                            Image(
+                                painter = painterResource(id = R.drawable.onboarding_ai),
+                                contentDescription = "Recipe idea",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -500,18 +499,6 @@ fun OnboardingScreenThree(viewModel: ShelfLifeViewModel) {
                         ) {
                             Text("Uses items you already track", style = MaterialTheme.typography.labelSmall, color = OnPeachContainer)
                         }
-                    }
-
-                    // Floating AI Match label
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .offset(x = 10.dp, y = (-10).dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer)
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Text("✨ AI Match", style = MaterialTheme.typography.labelSmall, color = OnMintContainer, fontWeight = FontWeight.Bold)
                     }
                 }
             }

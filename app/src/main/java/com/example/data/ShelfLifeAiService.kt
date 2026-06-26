@@ -33,6 +33,17 @@ data class AssistantReply(
     val recipeUpdate: RecipeUpdateSuggestion? = null
 )
 
+data class ReceiptCleanupItem(
+    val name: String,
+    val brand: String = "",
+    val quantity: Double = 1.0,
+    val unit: String = "pcs",
+    val category: String = "Pantry",
+    val store: String = "",
+    val price: Double? = null,
+    val confidence: Double = 0.5
+)
+
 class ShelfLifeAiService {
     private val baseUrl = BuildConfig.SHELFLIFE_WORKER_BASE_URL.trim().trimEnd('/')
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
@@ -86,10 +97,20 @@ class ShelfLifeAiService {
         chatHistory: List<Pair<String, Boolean>>,
         latestUserMessage: String,
         recipeContext: RecipeContext? = null,
-        pantryIngredients: List<Ingredient> = emptyList()
+        pantryIngredients: List<Ingredient> = emptyList(),
+        isRepeatedQuestion: Boolean = false
     ): AssistantReply {
         val body = JSONObject()
             .put("message", latestUserMessage)
+            .put("isRepeatedQuestion", isRepeatedQuestion)
+            .put(
+                "responseGuidance",
+                if (isRepeatedQuestion) {
+                    "The user asked the same question again. Do not repeat the previous answer. Give a different useful angle, alternative substitution, or ask a clarifying question if needed."
+                } else {
+                    "Use the recipe context and pantry items. Avoid repeating prior assistant replies."
+                }
+            )
             .put(
                 "history",
                 JSONArray(chatHistory.map {
@@ -149,8 +170,33 @@ class ShelfLifeAiService {
             expirationDate = ProductDates.offsetDate(10),
             purchaseDate = ProductDates.offsetDate(0),
             location = response.optString("location").ifBlank { "Pantry" },
-            notes = response.optString("notes").ifBlank { "Expiration date estimated. Review before adding." }
+            notes = response.optString("notes").ifBlank { "Expiration date estimated. Review before adding." },
+            dateType = IngredientDateType.ESTIMATED_USE_BY,
+            barcode = barcode,
+            brand = response.optString("brand"),
+            packageSize = response.optString("packageSize")
         )
+    }
+
+    suspend fun cleanupReceiptItems(receiptText: String): List<ReceiptCleanupItem> {
+        if (receiptText.isBlank()) return emptyList()
+        val response = postJson("cleanupReceiptItems", JSONObject().put("receiptText", receiptText))
+        val items = response.optJSONArray("items") ?: JSONArray()
+        return (0 until items.length()).mapNotNull { index ->
+            val item = items.optJSONObject(index) ?: return@mapNotNull null
+            val name = item.optString("name").trim()
+            if (name.isBlank()) return@mapNotNull null
+            ReceiptCleanupItem(
+                name = name,
+                brand = item.optString("brand").trim(),
+                quantity = item.optDoubleOrNull("quantity")?.takeIf { it > 0.0 } ?: 1.0,
+                unit = item.optString("unit").ifBlank { "pcs" },
+                category = item.optString("category").ifBlank { "Pantry" },
+                store = item.optString("store").trim(),
+                price = item.optDoubleOrNull("price"),
+                confidence = item.optDoubleOrNull("confidence") ?: 0.5
+            )
+        }
     }
 
     private suspend fun postJson(path: String, body: JSONObject): JSONObject {

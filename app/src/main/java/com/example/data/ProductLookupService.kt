@@ -6,6 +6,7 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
@@ -75,34 +76,44 @@ object ProductLookupHelper {
         if (trimmed.isBlank()) return@withContext null
 
         try {
-            val response = OFFClient.service.getProductDetails(trimmed)
-            if (response.status == 1 && response.product != null) {
-                val prod = response.product
-                val rawName = prod.product_name ?: "Unknown Food Item"
-                val brand = prod.brands?.split(",")?.firstOrNull()?.trim()
-                val fullName = if (brand.isNullOrBlank()) rawName else "$brand $rawName"
-                
-                val category = mapCategoriesToPantryCategory(prod.categories, rawName)
-                val (qty, unit) = parseQuantity(prod.quantity)
-
-                return@withContext Ingredient(
-                    userId = userId,
-                    name = fullName,
-                    category = category,
-                    quantity = qty,
-                    unit = unit,
-                    expirationDate = ProductDates.offsetDate(10),
-                    purchaseDate = ProductDates.offsetDate(0),
-                    location = mapCategoryToLocation(category),
-                    notes = "Expiration date estimated. Review before adding."
-                )
+            val response = withTimeoutOrNull(5_000) {
+                OFFClient.service.getProductDetails(trimmed)
             }
+            if (response == null) {
+                Log.w("ProductLookup", "OpenFoodFacts lookup timed out.")
+            } else if (response.status == 1 && response.product != null) {
+                    val prod = response.product
+                    val rawName = prod.product_name ?: "Unknown Food Item"
+                    val brand = prod.brands?.split(",")?.firstOrNull()?.trim()
+                    val category = mapCategoriesToPantryCategory(prod.categories, rawName)
+                    val (qty, unit) = parseQuantity(prod.quantity)
+
+                    return@withContext Ingredient(
+                        userId = userId,
+                        name = rawName,
+                        category = category,
+                        quantity = qty,
+                        unit = unit,
+                        expirationDate = ProductDates.offsetDate(10),
+                        purchaseDate = ProductDates.offsetDate(0),
+                        location = mapCategoryToLocation(category),
+                        notes = "Expiration date estimated. Review before adding.",
+                        dateType = IngredientDateType.ESTIMATED_USE_BY,
+                        brand = brand.orEmpty(),
+                        barcode = trimmed,
+                        packageSize = prod.quantity.orEmpty()
+                    )
+                }
         } catch (e: Exception) {
             Log.e("ProductLookup", "OpenFoodFacts API error: ${e.message}")
         }
 
         try {
-            return@withContext aiFallback()
+            return@withContext withTimeoutOrNull(4_000) {
+                aiFallback()
+            }.also {
+                if (it == null) Log.w("ProductLookup", "AI barcode fallback timed out or returned no match.")
+            }
         } catch (e: Exception) {
             Log.e("ProductLookup", "AI barcode fallback error: ${e.message}")
         }

@@ -28,6 +28,9 @@ export default {
       if (url.pathname === "/identifyBarcodeFallback") {
         return json(await identifyBarcodeFallback(body, env));
       }
+      if (url.pathname === "/cleanupReceiptItems") {
+        return json(await cleanupReceiptItems(body, env));
+      }
       return json({ error: "Unknown endpoint." }, 404);
     } catch (error) {
       const message = error && error.message ? error.message : "Unexpected Worker error.";
@@ -100,24 +103,27 @@ async function chatAssistant(body, env) {
   const contextText = recipeContext
     ? `Current recipe: ${recipeContext.recipeName}. Available ingredients: ${(recipeContext.availableIngredients || []).join(", ")}. Missing ingredients: ${(recipeContext.missingIngredients || []).join(", ")}. Steps: ${(recipeContext.steps || []).join(" | ")}.`
     : "No selected recipe context.";
+  const latestMessage = String(body.message || "").slice(0, 2000);
+  const guidance = String(body.responseGuidance || "").slice(0, 1000);
+  const wantsRecipeUpdate = recipeContext && asksForRecipeUpdate(latestMessage);
 
   const messages = [
     {
       role: "system",
-      content: recipeContext
-        ? `You are Kitchen AI inside ShelfLife. Answer specifically about the selected recipe. When the user requests cheaper ingredients, substitutions, vegetarian changes, removals, or another recipe modification, return JSON only with this shape: {"reply":"clear explanation","recipeUpdate":{"summary":"short description","ingredients":[{"name":"ingredient","quantity":1,"unit":"cup","required":true}],"steps":[{"text":"updated step"}]}}. recipeUpdate must contain the complete revised recipe, not only changed items. If no recipe change is requested, set recipeUpdate to null. Current pantry: ${pantryText}. ${contextText}`
-        : `You are Kitchen AI inside ShelfLife. Give concise, practical cooking and pantry answers. Current pantry: ${pantryText}. If data is uncertain, say so.`
+      content: wantsRecipeUpdate
+        ? `You are Kitchen AI inside ShelfLife. The user is asking to modify the selected recipe. Return JSON only with this shape: {"reply":"clear explanation","recipeUpdate":{"summary":"short description","ingredients":[{"name":"ingredient","quantity":1,"unit":"cup","required":true}],"steps":[{"text":"updated step"}]}}. recipeUpdate must contain the complete revised recipe, not only changed items. Current pantry: ${pantryText}. ${contextText}. ${guidance}`
+        : `You are Kitchen AI inside ShelfLife. Answer the user's current question directly and remember the conversation history in this request. Do not return JSON. Do not claim you prepared an updated recipe unless the user explicitly asked to change the recipe. Current pantry: ${pantryText}. ${contextText}. ${guidance}`
     },
     ...history.map((item) => ({
       role: item.role === "assistant" ? "assistant" : "user",
       content: String(item.content || "").slice(0, 2000)
     })),
-    { role: "user", content: String(body.message || "").slice(0, 2000) }
+    { role: "user", content: latestMessage }
   ];
 
-  if (!recipeContext) {
+  if (!wantsRecipeUpdate) {
     const reply = await callDeepSeek(env, messages, false);
-    return { reply };
+    return { reply, recipeUpdate: null };
   }
 
   const content = await callDeepSeek(env, messages, true);
@@ -130,6 +136,25 @@ async function chatAssistant(body, env) {
   } catch (_) {
     return { reply: content, recipeUpdate: null };
   }
+}
+
+function asksForRecipeUpdate(message) {
+  const text = String(message || "").toLowerCase();
+  return [
+    "cheaper",
+    "substitute",
+    "replace",
+    "alternative",
+    "vegetarian",
+    "vegan",
+    "remove",
+    "skip",
+    "change the recipe",
+    "modify",
+    "update the recipe",
+    "use this",
+    "swap"
+  ].some((keyword) => text.includes(keyword));
 }
 
 async function identifyBarcodeFallback(body, env) {
@@ -158,6 +183,65 @@ async function identifyBarcodeFallback(body, env) {
     location: stringOr(parsed.location, "Pantry"),
     notes: stringOr(parsed.notes, "AI barcode fallback. Please review before adding.")
   };
+}
+
+async function cleanupReceiptItems(body, env) {
+  const receiptText = String(body.receiptText || "").trim().slice(0, 12000);
+  if (!receiptText) {
+    return { items: [] };
+  }
+
+  const content = await callDeepSeek(env, [
+    {
+      role: "system",
+      content: "You clean OCR grocery receipts for ShelfLife. Return valid JSON only. Never include markdown or explanations."
+    },
+    {
+      role: "user",
+      content: `Clean this OCR grocery receipt into JSON only.
+
+Return exactly:
+{"items":[{"name":"Product Name","brand":"Brand","quantity":1,"unit":"pcs","category":"Pantry","store":"Store Name","price":0.0,"confidence":0.0}]}
+
+Rules:
+- Extract only real grocery items actually purchased.
+- Ignore totals, VAT, discounts, payment lines, timestamps, cashier text, loyalty text, reference numbers, and noise.
+- Merge duplicate lines when obvious.
+- Normalize quantity and unit. Use "pcs" if unknown.
+- price must be numeric or null.
+- confidence must be 0..1.
+- category must be one of: Produce, Dairy, Meat, Grains, Pantry, Bakery, Beverages, Frozen.
+- If no items found, return {"items":[]}.
+- Return valid JSON only.
+
+Receipt OCR text:
+${receiptText}`
+    }
+  ], true);
+
+  const parsed = parseJson(content);
+  const allowedCategories = new Set(["Produce", "Dairy", "Meat", "Grains", "Pantry", "Bakery", "Beverages", "Frozen"]);
+  const items = Array.isArray(parsed.items) ? parsed.items : [];
+  const sanitizedItems = items.map((item) => {
+    const name = stringOr(item?.name, "");
+    if (!name) return null;
+    const quantity = Number(item?.quantity);
+    const price = Number(item?.price);
+    const confidence = Number(item?.confidence);
+    const category = stringOr(item?.category, "Pantry");
+    return {
+      name,
+      brand: stringOr(item?.brand, ""),
+      quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+      unit: stringOr(item?.unit, "pcs"),
+      category: allowedCategories.has(category) ? category : "Pantry",
+      store: stringOr(item?.store, ""),
+      price: Number.isFinite(price) ? price : null,
+      confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0.5
+    };
+  }).filter(Boolean);
+
+  return { items: sanitizedItems };
 }
 
 async function requireFirebaseUser(request, env) {

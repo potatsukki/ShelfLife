@@ -17,10 +17,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.SavedRecipe
+import com.example.ui.components.ShelfLifeAsyncImage
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ShelfLifeViewModel
 
@@ -32,13 +36,16 @@ fun DashboardScreen(viewModel: ShelfLifeViewModel) {
 
     // Dynamic Calculations
     val expiringCount = remember(ingredients) {
-        ingredients.count { 
+        ingredients.count {
+            if (!it.hasTrackedDate) return@count false
             val days = viewModel.getDaysExpiry(it.expirationDate)
             days in 0..3
         }
     }
     val lowStockCount = remember(ingredients) {
-        ingredients.count { it.quantity <= it.lowStockThreshold }
+        ingredients.count {
+            it.lowStockReminderEnabled && it.quantity <= it.lowStockThreshold
+        }
     }
     val totalCount = ingredients.size
 
@@ -49,16 +56,17 @@ fun DashboardScreen(viewModel: ShelfLifeViewModel) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(scrollState)
-            .padding(bottom = 96.dp) // padding to avoid bottom navbar overlap
     ) {
         // Hello Section
+        val firstName = authState.displayLabel.trim().split(" ").firstOrNull()
+            .takeUnless { it.isNullOrBlank() } ?: "there"
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
             Text(
-                text = "Hello, ${authState.displayLabel}",
+                text = "Hello, $firstName",
                 style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.onBackground
             )
@@ -72,7 +80,7 @@ fun DashboardScreen(viewModel: ShelfLifeViewModel) {
         // Expiration Warning alert card
         val urgentExpiringItem = remember(ingredients) {
             ingredients
-                .filter { viewModel.getDaysExpiry(it.expirationDate) in 0..1 }
+                .filter { it.hasTrackedDate && viewModel.getDaysExpiry(it.expirationDate) in 0..1 }
                 .minByOrNull { viewModel.getDaysExpiry(it.expirationDate) }
         }
 
@@ -96,7 +104,9 @@ fun DashboardScreen(viewModel: ShelfLifeViewModel) {
                         modifier = Modifier.size(24.dp)
                     )
                     Text(
-                        text = "${urgentExpiringItem.name} expires ${if (viewModel.getDaysExpiry(urgentExpiringItem.expirationDate) == 0) "today" else "tomorrow"}. Use it soon or mark it used if it is already gone.",
+                        text = "${urgentExpiringItem.name} ${urgentExpiringItem.dateLabel.lowercase()} is " +
+                            "${if (viewModel.getDaysExpiry(urgentExpiringItem.expirationDate) == 0) "today" else "tomorrow"}. " +
+                            "Use it soon or update the item if it is already gone.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -226,91 +236,188 @@ fun DashboardScreen(viewModel: ShelfLifeViewModel) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-        ) {
-            Text(
-                text = "Recommended Today",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-
-            val recommended = suggestedRecipes.firstOrNull()
-            val cardBgColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White
-
-            Card(
-                colors = CardDefaults.cardColors(containerColor = cardBgColor),
-                shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable {
-                        if (recommended == null) {
-                            viewModel.navigateTo("recipes")
-                        } else {
-                            viewModel.selectRecipe(recommended)
-                            viewModel.navigateTo("recipe_detail/${recommended.id}")
-                        }
-                    }
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    if (recommended == null) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("No recommendation yet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Text("Add pantry items, then generate AI recipe matches.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    } else {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                Text(
+                    text = "Recommended Today",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontWeight = FontWeight.Bold
+                )
+                if (suggestedRecipes.isNotEmpty()) {
+                    Text(
+                        text = "View all",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { viewModel.navigateTo("recipes") }
+                            .padding(6.dp)
+                    )
+                }
+            }
+
+            if (suggestedRecipes.isEmpty()) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White
+                    ),
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .clickable { viewModel.navigateTo("recipes") }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column {
                             Text(
-                                text = recommended.name,
-                                style = MaterialTheme.typography.titleLarge,
+                                "No recommendations yet",
+                                style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(imageVector = Icons.Default.BookmarkBorder, contentDescription = "Bookmark", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(SecondaryFixed.copy(alpha = 0.3f))
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(imageVector = Icons.Default.Eco, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(18.dp))
                             Text(
-                                text = recommended.whySuggested,
+                                "Generate recipe matches from your pantry.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = FontWeight.Medium
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    suggestedRecipes.take(8).forEach { recipe ->
+                        DashboardRecipeCard(
+                            recipe = recipe,
+                            viewModel = viewModel,
+                            onClick = {
+                                viewModel.selectRecipe(recipe)
+                                viewModel.navigateTo("recipe_detail/${recipe.id}")
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DashboardRecipeCard(
+    recipe: SavedRecipe,
+    viewModel: ShelfLifeViewModel,
+    onClick: () -> Unit
+) {
+    val saved by viewModel.isRecipeSaved(recipe.id).collectAsState(initial = false)
+    val isDark = MaterialTheme.colorScheme.isDark
+    val cardColor = if (isDark) Color(0xFF242825) else Color.White
+
+    Card(
+        modifier = Modifier
+            .width(152.dp)
+            .height(216.dp)
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = cardColor),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(104.dp)
+            ) {
+                ShelfLifeAsyncImage(
+                    imageUrl = recipe.imageResUrl,
+                    contentDescription = recipe.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                IconButton(
+                    onClick = { viewModel.toggleSaveRecipe(recipe) },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.36f))
+                ) {
+                    Icon(
+                        imageVector = if (saved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (saved) "Remove favorite" else "Add favorite",
+                        tint = if (saved) Color(0xFFFF5B62) else Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(8.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.88f))
+                        .padding(horizontal = 9.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = recipe.difficulty.ifBlank { "Suggested" },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 11.dp, vertical = 9.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = recipe.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AccessTime,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = recipe.prepTime,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
                 }
             }
         }

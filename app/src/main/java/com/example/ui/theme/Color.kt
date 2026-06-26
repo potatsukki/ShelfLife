@@ -16,7 +16,7 @@ val BlueContainer = Color(0xFF8CBCC2)
 val OnBlueContainer = Color(0xFF194C52)
 
 val WarmBackground = Color(0xFFFFF9F0)
-val DeepWalnutText = Color(0xFF1D1B16)
+val DeepWalnutText = Color(0xFF191711)
 val SoftGrayText = Color(0xFF414942)
 
 val SoftCoralError = Color(0xFFBA1A1A)

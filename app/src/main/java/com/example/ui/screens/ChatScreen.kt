@@ -80,7 +80,7 @@ fun ChatScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onBack) {
@@ -90,7 +90,7 @@ fun ChatScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = "Kitchen AI Assistant",
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -98,7 +98,7 @@ fun ChatScreen(
                         text = "Powered by ShelfLife AI",
                         style = MaterialTheme.typography.labelSmall,
                         color = if (isDark) MaterialTheme.colorScheme.primary else SageGreen,
-                        fontSize = 10.sp
+                        fontSize = 12.sp
                     )
                 }
                 Spacer(modifier = Modifier.weight(1f))
@@ -113,59 +113,100 @@ fun ChatScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .imePadding() // slide up neatly when soft keyboard draws
         ) {
-            // Quick instructions alert banner
-            Box(
+            // Chat canvas
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .weight(1f)
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(30.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isDark) {
+                        Color(0xFF20271F)
+                    } else {
+                        Color(0xFFFFFCF6)
+                    }
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 0.dp else 4.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
-                    Text(
-                        text = selectedRecipe?.let { "Ask about ${it.name}, substitutions, or changes." }
-                            ?: "Ask anything about substitutes, meal prep, or reducing kitchen waste!",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-
-            // Message Thread viewport
-            LazyColumn(
-                state = lazyListState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(chatHistory, key = { it.id }) { message ->
-                    ChatBubble(
-                        message = message.text,
-                        isUser = message.isUser,
-                        recipeUpdateSummary = message.recipeUpdate?.summary,
-                        isApplied = message.isApplied,
-                        onApplyRecipeUpdate = message.recipeUpdate?.let {
-                            { viewModel.applyRecipeUpdate(message.id) }
-                        }
-                    )
-                }
-
-                if (loading) {
-                    item {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                if (isDark) {
+                                    Color(0xFF2E4A38)
+                                } else {
+                                    Color(0xFFDCECDD)
+                                }
+                            )
+                            .padding(horizontal = 18.dp, vertical = 14.dp)
+                    ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(vertical = 8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            Text("Kitchen AI is cooking up a reply...", style = MaterialTheme.typography.bodySmall, color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText)
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = selectedRecipe?.let { "Ask about ${it.name}, substitutions, or changes." }
+                                    ?: "Ask anything about substitutes, meal prep, or reducing kitchen waste!",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                lineHeight = 20.sp
+                            )
+                        }
+                    }
+
+                    LazyColumn(
+                        state = lazyListState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentPadding = PaddingValues(
+                            start = 18.dp,
+                            top = 18.dp,
+                            end = 18.dp,
+                            bottom = 18.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(chatHistory, key = { it.id }) { message ->
+                            ChatBubble(
+                                message = message.text,
+                                isUser = message.isUser,
+                                recipeUpdateSummary = message.recipeUpdate?.summary,
+                                isApplied = message.isApplied,
+                                onApplyRecipeUpdate = message.recipeUpdate?.let {
+                                    { viewModel.applyRecipeUpdate(message.id) }
+                                }
+                            )
+                        }
+
+                        if (loading) {
+                            item {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Text(
+                                        "Kitchen AI is cooking up a reply...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -176,80 +217,116 @@ fun ChatScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                val isDark = MaterialTheme.colorScheme.isDark
-                val chipBg = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White
+                val chipBg = if (isDark) {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f)
+                } else {
+                    Color.White
+                }
 
                 templates.forEach { temp ->
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
                             .background(chipBg)
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                            .border(
+                                1.dp,
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                                CircleShape
+                            )
                             .clickable { viewModel.sendChatMessage(temp) }
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .padding(horizontal = 14.dp, vertical = 7.dp)
                     ) {
-                        Text(temp, style = MaterialTheme.typography.labelSmall, color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText)
+                        Text(
+                            text = temp,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
             }
 
             // Bottom Input Block
-            val isDark = MaterialTheme.colorScheme.isDark
-            val inputRowBg = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White
+            val inputRowBg = if (isDark) Color(0xFF2D382F) else Color.White
 
-            Row(
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(inputRowBg)
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .imePadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                shape = RoundedCornerShape(30.dp),
+                colors = CardDefaults.cardColors(containerColor = inputRowBg),
+                elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 0.dp else 3.dp)
             ) {
-                OutlinedTextField(
-                    value = activeInput,
-                    onValueChange = { activeInput = it },
-                    placeholder = {
-                        Text(
-                            selectedRecipe?.let { "Ask about this recipe or ingredient substitutions" }
-                                ?: "Ask Kitchen AI about pantry planning..."
-                        )
-                    },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.background,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.background,
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = Color.Transparent
-                    ),
-                    shape = RoundedCornerShape(24.dp),
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .testTag("ai_assistant_input")
-                )
-
-                IconButton(
-                    onClick = {
-                        if (activeInput.isNotBlank()) {
-                            viewModel.sendChatMessage(activeInput)
-                            activeInput = ""
-                        }
-                    },
-                    enabled = activeInput.isNotBlank() && !loading,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (activeInput.isNotBlank() && !loading) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceVariant
-                        )
+                        .fillMaxWidth()
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Default.Send,
-                        contentDescription = "Send",
-                        tint = if (activeInput.isNotBlank() && !loading) Color.White else SoftGrayText
+                    OutlinedTextField(
+                        value = activeInput,
+                        onValueChange = { activeInput = it },
+                        placeholder = {
+                            Text(
+                                selectedRecipe?.let { "Ask about this recipe" }
+                                    ?: "Ask Kitchen AI about pantry planning..."
+                            )
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = if (isDark) Color(0xFF1F241F) else Color(0xFFFFFCF6),
+                            unfocusedContainerColor = if (isDark) Color(0xFF1F241F) else Color(0xFFFFFCF6),
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = Color.Transparent,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        shape = RoundedCornerShape(22.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 52.dp)
+                            .testTag("ai_assistant_input")
                     )
+
+                    val canSend = activeInput.isNotBlank() && !loading
+                    IconButton(
+                        onClick = {
+                            if (activeInput.isNotBlank()) {
+                                viewModel.sendChatMessage(activeInput)
+                                activeInput = ""
+                            }
+                        },
+                        enabled = canSend,
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (canSend) {
+                                    MaterialTheme.colorScheme.primary
+                                } else if (isDark) {
+                                    Color(0xFF455246)
+                                } else {
+                                    Color(0xFFEDE7DF)
+                                }
+                            )
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Default.Send,
+                            contentDescription = "Send",
+                            tint = if (canSend) {
+                                Color.White
+                            } else if (isDark) {
+                                Color(0xFFD7E8D9)
+                            } else {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -267,14 +344,14 @@ fun ChatBubble(
     val isDark = MaterialTheme.colorScheme.isDark
 
     val bubbleBgColor = if (isUser) {
-        if (isDark) MaterialTheme.colorScheme.primaryContainer else DeepWalnutText
+        if (isDark) Color(0xFF7EBC96) else SageGreen
     } else {
-        if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White
+        if (isDark) Color(0xFF3B463D) else Color.White
     }
     val bubbleTextColor = if (isUser) {
-        if (isDark) MaterialTheme.colorScheme.onPrimaryContainer else Color.White
+        if (isDark) Color(0xFF102417) else Color.White
     } else {
-        MaterialTheme.colorScheme.onSurface
+        if (isDark) Color(0xFFF4F7F0) else MaterialTheme.colorScheme.onSurface
     }
 
     Box(
@@ -284,7 +361,7 @@ fun ChatBubble(
         Row(
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth(0.85f)
+            modifier = Modifier.fillMaxWidth(0.92f)
         ) {
             if (!isUser) {
                 // AI Avatar
@@ -311,10 +388,10 @@ fun ChatBubble(
                         containerColor = bubbleBgColor
                     ),
                     shape = RoundedCornerShape(
-                        topStart = if (isUser) 16.dp else 4.dp,
-                        topEnd = if (isUser) 4.dp else 16.dp,
-                        bottomStart = 16.dp,
-                        bottomEnd = 16.dp
+                        topStart = if (isUser) 20.dp else 8.dp,
+                        topEnd = if (isUser) 8.dp else 20.dp,
+                        bottomStart = 20.dp,
+                        bottomEnd = 20.dp
                     )
                 ) {
                     if (isUser) {

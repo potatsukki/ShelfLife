@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.map
 data class SettingsState(
     val onboardingCompleted: Boolean = false,
     val isDarkMode: Boolean = false,
+    val darkModeSetByUser: Boolean = false,
     val expirationAlerts: Boolean = true,
     val lowStockAlerts: Boolean = true,
     val vegetarianMode: Boolean = false,
@@ -24,6 +25,7 @@ class AppSettingsStore(private val context: Context) {
     private object Keys {
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val DARK_MODE = booleanPreferencesKey("dark_mode")
+        val DARK_MODE_SET_BY_USER = booleanPreferencesKey("dark_mode_set_by_user")
         val EXPIRATION_ALERTS = booleanPreferencesKey("expiration_alerts")
         val LOW_STOCK_ALERTS = booleanPreferencesKey("low_stock_alerts")
         val VEGETARIAN_MODE = booleanPreferencesKey("vegetarian_mode")
@@ -36,6 +38,7 @@ class AppSettingsStore(private val context: Context) {
         SettingsState(
             onboardingCompleted = preferences[Keys.ONBOARDING_COMPLETED] ?: false,
             isDarkMode = preferences[Keys.DARK_MODE] ?: false,
+            darkModeSetByUser = preferences[Keys.DARK_MODE_SET_BY_USER] ?: false,
             expirationAlerts = preferences[Keys.EXPIRATION_ALERTS] ?: true,
             lowStockAlerts = preferences[Keys.LOW_STOCK_ALERTS] ?: true,
             vegetarianMode = preferences[Keys.VEGETARIAN_MODE] ?: false,
@@ -46,7 +49,12 @@ class AppSettingsStore(private val context: Context) {
     }
 
     suspend fun setOnboardingCompleted(value: Boolean) = setBoolean(Keys.ONBOARDING_COMPLETED, value)
-    suspend fun setDarkMode(value: Boolean) = setBoolean(Keys.DARK_MODE, value)
+    suspend fun setDarkMode(value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[Keys.DARK_MODE] = value
+            preferences[Keys.DARK_MODE_SET_BY_USER] = true
+        }
+    }
     suspend fun setExpirationAlerts(value: Boolean) = setBoolean(Keys.EXPIRATION_ALERTS, value)
     suspend fun setLowStockAlerts(value: Boolean) = setBoolean(Keys.LOW_STOCK_ALERTS, value)
     suspend fun setVegetarianMode(value: Boolean) = setBoolean(Keys.VEGETARIAN_MODE, value)

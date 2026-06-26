@@ -18,8 +18,8 @@ android {
     applicationId = "com.aistudio.shelflife.gkmvqx"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 4
+    versionName = "4.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -90,7 +90,9 @@ dependencies {
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
   implementation(libs.play.services.auth)
+  implementation("androidx.work:work-runtime-ktx:2.9.1")
   implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+  implementation("com.google.mlkit:text-recognition:16.0.1")
   implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)

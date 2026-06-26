@@ -24,6 +24,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.Ingredient
+import com.example.data.IngredientDateType
+import com.example.data.IngredientStatus
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ShelfLifeViewModel
 
@@ -50,32 +52,41 @@ fun IngredientDetailScreen(
     }
 
     val ingredient = item!!
-    val daysLeft = viewModel.getDaysExpiry(ingredient.expirationDate)
+    val daysLeft = if (ingredient.hasTrackedDate) {
+        viewModel.getDaysExpiry(ingredient.expirationDate)
+    } else {
+        null
+    }
     val isDark = MaterialTheme.colorScheme.isDark
     val cardBgColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White
     var confirmAction by remember { mutableStateOf<String?>(null) }
 
     // Layout configuration depending on alert state
     val (statusColor, statusBg, statusText) = when {
-        daysLeft < 0 -> Triple(
+        !ingredient.hasTrackedDate -> Triple(
+            MaterialTheme.colorScheme.primary,
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+            "No printed date"
+        )
+        daysLeft!! < 0 -> Triple(
             if (isDark) Color(0xFFFFB4AB) else SoftCoralError,
             if (isDark) SoftCoralErrorContainer.copy(alpha = 0.2f) else SoftCoralErrorContainer,
-            "Expired"
+            "${IngredientDateType.shortLabel(ingredient.dateType)} passed"
         )
         daysLeft == 0 -> Triple(
             if (isDark) Color(0xFFFFB4AB) else SoftCoralError,
             if (isDark) SoftCoralErrorContainer.copy(alpha = 0.2f) else SoftCoralErrorContainer,
-            "Expires Today"
+            "${IngredientDateType.shortLabel(ingredient.dateType)} today"
         )
         daysLeft in 1..3 -> Triple(
             if (isDark) PeachContainer else OnPeachContainer,
             if (isDark) PeachSecondary.copy(alpha = 0.4f) else PeachContainer,
-            "Expiring Soon ($daysLeft days left)"
+            "${IngredientDateType.shortLabel(ingredient.dateType)} in $daysLeft days"
         )
         else -> Triple(
             if (isDark) MintContainer else SageGreen,
             if (isDark) SageGreen.copy(alpha = 0.3f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-            "Fresh ($daysLeft days left)"
+            "${IngredientDateType.shortLabel(ingredient.dateType)} in $daysLeft days"
         )
     }
 
@@ -147,7 +158,7 @@ fun IngredientDetailScreen(
 
             // Large quantity
             Text(
-                text = "${ingredient.quantity} ${ingredient.unit}",
+                text = "${formatDetailQuantity(ingredient.quantity)} ${ingredient.unit}",
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -187,12 +198,52 @@ fun IngredientDetailScreen(
                     )
 
                     DetailFieldRow(label = "Category", value = ingredient.category, icon = Icons.Default.Category)
+                    if (ingredient.brand.isNotBlank()) {
+                        DetailDivider()
+                        DetailFieldRow(label = "Brand", value = ingredient.brand, icon = Icons.Default.Business)
+                    }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     DetailFieldRow(label = "Primary Location", value = ingredient.location, icon = Icons.Default.LocationOn)
+                    if (ingredient.storageCondition.isNotBlank()) {
+                        DetailDivider()
+                        DetailFieldRow(label = "Storage Condition", value = ingredient.storageCondition, icon = Icons.Default.Inventory2)
+                    }
+                    if (ingredient.itemStatus != IngredientStatus.SEALED) {
+                        DetailDivider()
+                        DetailFieldRow(label = "Item Status", value = ingredient.itemStatus, icon = Icons.Default.Info)
+                    }
+                    if (ingredient.openedDate.isNotBlank()) {
+                        DetailDivider()
+                        DetailFieldRow(label = "Opened Date", value = ingredient.openedDate, icon = Icons.Default.Event)
+                    }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     DetailFieldRow(label = "Purchase Date", value = ingredient.purchaseDate, icon = Icons.Default.CalendarToday)
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    DetailFieldRow(label = "Expiration Date", value = ingredient.expirationDate, icon = Icons.Default.CalendarMonth)
+                    DetailDivider()
+                    DetailFieldRow(
+                        label = ingredient.dateLabel,
+                        value = ingredient.expirationDate.ifBlank { "Not tracked" },
+                        icon = Icons.Default.CalendarMonth
+                    )
+                    if (ingredient.packageSize.isNotBlank()) {
+                        DetailDivider()
+                        DetailFieldRow(label = "Package Size", value = ingredient.packageSize, icon = Icons.Default.Straighten)
+                    }
+                    if (ingredient.store.isNotBlank()) {
+                        DetailDivider()
+                        DetailFieldRow(label = "Purchased From", value = ingredient.store, icon = Icons.Default.Store)
+                    }
+                    if (ingredient.price != null) {
+                        DetailDivider()
+                        DetailFieldRow(
+                            label = "Price",
+                            value = String.format(java.util.Locale.US, "%.2f", ingredient.price),
+                            icon = Icons.Default.Payments
+                        )
+                    }
+                    if (ingredient.barcode.isNotBlank()) {
+                        DetailDivider()
+                        DetailFieldRow(label = "Barcode", value = ingredient.barcode, icon = Icons.Default.QrCode)
+                    }
                     
                     if (ingredient.notes.isNotBlank()) {
                         HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -345,6 +396,17 @@ fun IngredientDetailScreen(
         )
     }
 }
+
+@Composable
+private fun DetailDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(vertical = 10.dp),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    )
+}
+
+private fun formatDetailQuantity(value: Double): String =
+    if (value % 1.0 == 0.0) value.toInt().toString() else value.toString()
 
 @Composable
 private fun DetailFieldRow(

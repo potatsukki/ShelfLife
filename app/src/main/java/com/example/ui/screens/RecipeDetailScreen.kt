@@ -2,7 +2,6 @@ package com.example.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -20,38 +19,43 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.example.data.IngredientNormalizer
+import com.example.data.RecipeOrigin
 import com.example.data.SavedRecipe
 import com.example.data.recipeSteps
+import com.example.data.scaledIngredients
 import com.example.ui.components.ShelfLifeAsyncImage
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ShelfLifeViewModel
-import com.example.ui.viewmodel.splitRecipeIngredients
 
 @Composable
 fun RecipeDetailScreen(
     viewModel: ShelfLifeViewModel,
     recipe: SavedRecipe,
     onBack: () -> Unit,
-    onStartCooking: () -> Unit = {}
+    onStartCooking: (Int) -> Unit = {},
+    onChat: () -> Unit = {},
+    onEdit: () -> Unit = {},
+    onDuplicate: () -> Unit = {},
+    onDelete: () -> Unit = {}
 ) {
     val isDark = MaterialTheme.colorScheme.isDark
     val context = LocalContext.current
     val isSaved by viewModel.isRecipeSaved(recipe.id).collectAsState(initial = false)
     val pantryIngredients by viewModel.ingredients.collectAsState()
+    var servings by remember(recipe.id) { mutableIntStateOf(recipe.baseServings.coerceAtLeast(1)) }
+    var showMenu by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
 
-    val ingredientSplit = remember(recipe, pantryIngredients) {
-        splitRecipeIngredients(recipe, pantryIngredients)
+    val scaledIngredients = remember(recipe, servings) { recipe.scaledIngredients(servings) }
+    val available = remember(scaledIngredients, pantryIngredients) {
+        scaledIngredients.filter { ingredient ->
+            pantryIngredients.any { pantry -> IngredientNormalizer.matches(ingredient.name, pantry.name) }
+        }
     }
-    val inPantry = ingredientSplit.available
-    val missing = ingredientSplit.missing
-
-    // Parse steps
-    val stepsList = remember(recipe) {
-        recipe.recipeSteps()
-    }
+    val missing = remember(scaledIngredients, available) { scaledIngredients - available.toSet() }
+    val stepsList = remember(recipe) { recipe.recipeSteps() }
 
     Scaffold(
         topBar = {
@@ -63,22 +67,53 @@ fun RecipeDetailScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onBack) {
-                    Icon(imageVector = Icons.AutoMirrored.Default.ArrowBack, contentDescription = "Go back")
+                    Icon(Icons.AutoMirrored.Default.ArrowBack, contentDescription = "Go back")
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
-                    text = "Recipe Details",
+                    "Recipe Details",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.weight(1f))
+                IconButton(onClick = onChat) {
+                    Icon(
+                        imageVector = Icons.Default.Chat,
+                        contentDescription = "Chat about this recipe",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
                 IconButton(onClick = { viewModel.toggleSaveRecipe(recipe) }) {
                     Icon(
                         imageVector = if (isSaved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = "Save recipe",
                         tint = if (isSaved) Color.Red else MaterialTheme.colorScheme.primary
                     )
+                }
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Recipe actions")
+                    }
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        if (recipe.origin == RecipeOrigin.USER) {
+                            DropdownMenuItem(
+                                text = { Text("Edit") },
+                                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                onClick = { showMenu = false; onEdit() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Duplicate") },
+                                leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                                onClick = { showMenu = false; onDuplicate() }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text("Delete") },
+                            leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
+                            onClick = { showMenu = false; showDeleteDialog = true }
+                        )
+                    }
                 }
             }
         },
@@ -91,20 +126,17 @@ fun RecipeDetailScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 40.dp)
         ) {
-            // Hero Image
             Box(
                 modifier = Modifier
-                    .fillOuterWidth()
+                    .fillMaxWidth()
                     .height(200.dp)
             ) {
                 ShelfLifeAsyncImage(
-                    imageUrl = recipe.imageResUrl,
+                    imageUrl = recipe.imageResUrl.ifBlank { recipe.localImageUri },
                     contentDescription = recipe.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
-
-                // Back overlay stats
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
@@ -114,120 +146,46 @@ fun RecipeDetailScreen(
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(imageVector = Icons.Default.AccessTime, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                        Text(recipe.prepTime, color = Color.White, style = MaterialTheme.typography.labelSmall)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = Color.Yellow, modifier = Modifier.size(16.dp))
-                        Text(recipe.difficulty, color = Color.White, style = MaterialTheme.typography.labelSmall)
-                    }
+                    if (recipe.prepTime.isNotBlank()) DetailStat(Icons.Default.AccessTime, recipe.prepTime)
+                    if (recipe.cookTime.isNotBlank()) DetailStat(Icons.Default.LocalFireDepartment, recipe.cookTime)
+                    DetailStat(Icons.Default.Star, recipe.difficulty.ifBlank { "Easy" })
                 }
             }
 
-            Column(modifier = Modifier.padding(16.dp)) {
-                // Title
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(
-                    text = recipe.name,
+                    recipe.name,
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
-
-                Text(
-                    text = recipe.whySuggested,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
+                val description = recipe.description.ifBlank { recipe.whySuggested }
+                if (description.isNotBlank()) {
+                    Text(
+                        description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText
+                    )
+                }
                 if (recipe.imageProvider.isNotBlank() && recipe.photographerName.isNotBlank()) {
                     Text(
-                        text = "Photo by ${recipe.photographerName} on ${recipe.imageProvider}",
+                        "Photo by ${recipe.photographerName} on ${recipe.imageProvider}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                ServingsCard(servings = servings, onDecrease = { if (servings > 1) servings-- }, onIncrease = { servings++ })
 
-                // Ingredients bento split section
                 Text(
-                    text = "Ingredients Match",
+                    "Ingredients Match",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    color = MaterialTheme.colorScheme.primary
                 )
+                IngredientsMatchSection(available, missing, isDark)
 
-                val cardBgColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color.White
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Left bento column: items in pantry
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = cardBgColor),
-                        shape = RoundedCornerShape(20.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = SageGreen, modifier = Modifier.size(18.dp))
-                                Text("Available (${inPantry.size})", style = MaterialTheme.typography.labelSmall, color = SageGreen, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            if (inPantry.isEmpty()) {
-                                Text("None match.", style = MaterialTheme.typography.bodySmall, color = SoftGrayText)
-                            } else {
-                                inPantry.forEach { item ->
-                                    Text(
-                                        text = "• ${item.displayText}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        modifier = Modifier.padding(vertical = 4.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Right bento column: items missing
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = cardBgColor),
-                        shape = RoundedCornerShape(20.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = SoftCoralError, modifier = Modifier.size(18.dp))
-                                Text("Missing (${missing.size})", style = MaterialTheme.typography.labelSmall, color = SoftCoralError, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            if (missing.isEmpty()) {
-                                Text("Ready to cook!", style = MaterialTheme.typography.bodySmall, color = SageGreen, fontWeight = FontWeight.Bold)
-                            } else {
-                                missing.forEach { item ->
-                                    Text(
-                                        text = "• ${item.displayText}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        modifier = Modifier.padding(vertical = 4.dp),
-                                        color = SoftCoralError
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Add missing items to list Action Button
                 if (missing.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(12.dp))
                     Button(
                         onClick = {
                             missing.forEach { item ->
@@ -239,69 +197,44 @@ fun RecipeDetailScreen(
                                     unit = item.unit.ifBlank { "pcs" }
                                 )
                             }
-                            Toast.makeText(context, "Added ${missing.size} items to shopping list!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Added ${missing.size} missing items to Shopping List.", Toast.LENGTH_SHORT).show()
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isDark) Color(0xFFFFD69A) else MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = OnPeachContainer
+                        ),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(imageVector = Icons.Default.AddShoppingCart, contentDescription = null, tint = OnPeachContainer)
-                            Text("Add Missing Items to Shopping List", color = OnPeachContainer, style = MaterialTheme.typography.labelSmall)
-                        }
+                        Icon(Icons.Default.AddShoppingCart, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Add Missing Items to Shopping List", fontWeight = FontWeight.Bold)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Chronological steps sequence
                 Text(
-                    text = "Cooking Steps",
+                    "Cooking Steps",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    color = MaterialTheme.colorScheme.primary
                 )
-
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    stepsList.forEachIndexed { index, step ->
-                        Row(
-                            verticalAlignment = Alignment.Top,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.fillMaxWidth()
+                stepsList.forEachIndexed { index, step ->
+                    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
                         ) {
-                            // Checked badge / indicator index
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("${index + 1}", color = if (isDark) MaterialTheme.colorScheme.onPrimaryContainer else OnMintContainer, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            }
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = step,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
+                            Text("${index + 1}", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
                         }
+                        Text(step, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // Start Cook Button
                 Button(
-                    onClick = onStartCooking,
+                    onClick = { onStartCooking(servings) },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     shape = CircleShape,
                     modifier = Modifier.fillMaxWidth()
@@ -311,7 +244,107 @@ fun RecipeDetailScreen(
             }
         }
     }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete recipe?") },
+            text = {
+                Text(
+                    if (recipe.origin == RecipeOrigin.USER) {
+                        "${recipe.name} will be permanently removed."
+                    } else {
+                        "This removes the recipe from suggestions and favorites."
+                    }
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteDialog = false
+                        if (recipe.origin == RecipeOrigin.USER) {
+                            onDelete()
+                        } else {
+                            viewModel.deleteMatchedRecipe(recipe)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") } }
+        )
+    }
 }
 
-// Support extension modifier for width
-private fun Modifier.fillOuterWidth() = this.fillMaxWidth()
+@Composable
+private fun DetailStat(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+        Text(label, color = Color.White, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+private fun ServingsCard(servings: Int, onDecrease: () -> Unit, onIncrease: () -> Unit) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(16.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text("Servings", fontWeight = FontWeight.Bold)
+                Text("Shopping and cooking quantities scale from this.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onDecrease) { Icon(Icons.Default.Remove, contentDescription = "Reduce servings") }
+                Text("$servings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                IconButton(onClick = onIncrease) { Icon(Icons.Default.Add, contentDescription = "Increase servings") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun IngredientsMatchSection(
+    available: List<com.example.data.RecipeIngredient>,
+    missing: List<com.example.data.RecipeIngredient>,
+    isDark: Boolean
+) {
+    val cardBgColor = if (isDark) Color(0xFF354139) else Color.White
+    val availableColor = if (isDark) Color(0xFF9DDEB4) else SageGreen
+    val missingColor = if (isDark) Color(0xFFFFB4AB) else SoftCoralError
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        IngredientColumn("Available", available, availableColor, cardBgColor, Modifier.weight(1f), "None match.")
+        IngredientColumn("Missing", missing, missingColor, cardBgColor, Modifier.weight(1f), "Ready to cook!")
+    }
+}
+
+@Composable
+private fun IngredientColumn(
+    title: String,
+    items: List<com.example.data.RecipeIngredient>,
+    color: Color,
+    background: Color,
+    modifier: Modifier,
+    emptyText: String
+) {
+    Card(colors = CardDefaults.cardColors(containerColor = background), shape = RoundedCornerShape(20.dp), modifier = modifier) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(if (title == "Available") Icons.Default.CheckCircle else Icons.Default.Warning, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
+                Text("$title (${items.size})", style = MaterialTheme.typography.labelSmall, color = color, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            if (items.isEmpty()) {
+                Text(emptyText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                items.forEach {
+                    Text("• ${it.displayText}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp), color = if (title == "Missing") color else MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        }
+    }
+}

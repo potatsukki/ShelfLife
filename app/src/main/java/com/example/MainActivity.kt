@@ -2,10 +2,12 @@ package com.example
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.compose.animation.*
+import androidx.core.view.WindowCompat
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -26,11 +28,36 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val viewModel: ShelfLifeViewModel = viewModel()
-            val isDarkModeEnabled by viewModel.isDarkMode.collectAsState()
+            val settingsState by viewModel.settingsState.collectAsState()
+            val systemDark = isSystemInDarkTheme()
+            val useDarkTheme = if (settingsState.darkModeSetByUser) {
+                settingsState.isDarkMode
+            } else {
+                systemDark
+            }
             val authState by viewModel.authUiState.collectAsState()
 
-            MyApplicationTheme(darkTheme = isDarkModeEnabled) {
+            SideEffect {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !useDarkTheme
+                    isAppearanceLightNavigationBars = !useDarkTheme
+                }
+            }
+
+            MyApplicationTheme(darkTheme = useDarkTheme) {
                 val currentRoute by viewModel.currentRoute.collectAsState()
+                BackHandler(
+                    enabled = currentRoute !in listOf(
+                        "dashboard",
+                        "auth",
+                        "splash",
+                        "onboarding_1",
+                        "onboarding_2",
+                        "onboarding_3"
+                    )
+                ) {
+                    viewModel.handleSystemBack()
+                }
 
                 // Define which screens should show top header & bottom nav elements
                 val showBars = remember(currentRoute) {
@@ -39,6 +66,7 @@ class MainActivity : ComponentActivity() {
 
                 // Temporary detail parameter states
                 var activeIngredientId by remember { mutableStateOf<Int?>(null) }
+                var activeCookingServings by remember { mutableIntStateOf(1) }
                 val activeRecipe by viewModel.selectedRecipe.collectAsState()
 
                 Scaffold(
@@ -99,20 +127,29 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onNavigateToAdd = {
                                         viewModel.navigateTo("add_ingredient")
+                                    },
+                                    onNavigateToReceiptScanner = {
+                                        viewModel.navigateTo("receipt_scanner")
                                     }
+                                )
+                            }
+                            currentRoute == "receipt_scanner" -> {
+                                ReceiptScannerScreen(
+                                    viewModel = viewModel,
+                                    onBack = { viewModel.navigateBackTo("pantry") }
                                 )
                             }
                             currentRoute == "add_ingredient" -> {
                                 AddIngredientScreen(
                                     viewModel = viewModel,
-                                    onBack = { viewModel.navigateTo("pantry") },
+                                    onBack = { viewModel.navigateBackTo("pantry") },
                                     ingredientId = null
                                 )
                             }
                             currentRoute == "edit_ingredient" && activeIngredientId != null -> {
                                 AddIngredientScreen(
                                     viewModel = viewModel,
-                                    onBack = { viewModel.navigateTo("pantry") },
+                                    onBack = { viewModel.navigateBackTo("pantry") },
                                     ingredientId = activeIngredientId
                                 )
                             }
@@ -120,7 +157,7 @@ class MainActivity : ComponentActivity() {
                                 IngredientDetailScreen(
                                     viewModel = viewModel,
                                     id = activeIngredientId!!,
-                                    onBack = { viewModel.navigateTo("pantry") },
+                                    onBack = { viewModel.navigateBackTo("pantry") },
                                     onEdit = { id ->
                                         activeIngredientId = id
                                         viewModel.navigateTo("edit_ingredient")
@@ -129,8 +166,7 @@ class MainActivity : ComponentActivity() {
                             }
                             currentRoute == "scanner" -> {
                                 ScannerScreen(
-                                    viewModel = viewModel,
-                                    onNavigateToAddManual = { viewModel.navigateTo("add_ingredient") }
+                                    viewModel = viewModel
                                 )
                             }
                             currentRoute == "recipes" -> {
@@ -142,29 +178,63 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onNavigateToChat = {
                                         viewModel.navigateTo("chat")
+                                    },
+                                    onCreateRecipe = {
+                                        viewModel.selectRecipe(null)
+                                        viewModel.navigateTo("add_recipe")
                                     }
+                                )
+                            }
+                            currentRoute == "add_recipe" -> {
+                                RecipeEditorScreen(
+                                    viewModel = viewModel,
+                                    existing = null,
+                                    onBack = { viewModel.navigateBackTo("recipes") }
+                                )
+                            }
+                            currentRoute == "edit_recipe" && activeRecipe != null -> {
+                                RecipeEditorScreen(
+                                    viewModel = viewModel,
+                                    existing = activeRecipe,
+                                    onBack = { viewModel.navigateBackTo("recipe_detail") }
                                 )
                             }
                             currentRoute == "recipe_detail" && activeRecipe != null -> {
                                 RecipeDetailScreen(
                                     viewModel = viewModel,
                                     recipe = activeRecipe!!,
-                                    onBack = { viewModel.navigateTo("recipes") },
-                                    onStartCooking = { viewModel.navigateTo("guided_cooking") }
+                                    onBack = { viewModel.navigateBackTo("recipes") },
+                                    onStartCooking = { servings ->
+                                        activeCookingServings = servings
+                                        viewModel.navigateTo("guided_cooking")
+                                    },
+                                    onChat = {
+                                        viewModel.selectRecipe(activeRecipe)
+                                        viewModel.navigateTo("chat")
+                                    },
+                                    onEdit = { viewModel.navigateTo("edit_recipe") },
+                                    onDuplicate = { viewModel.duplicateUserRecipe(activeRecipe!!) },
+                                    onDelete = { viewModel.deleteUserRecipe(activeRecipe!!) }
                                 )
                             }
                             // Direct matching for recomended Today
                             currentRoute.startsWith("recipe_detail/") -> {
                                 val rId = currentRoute.substringAfter("/")
-                                val matched = viewModel.suggestedRecipes.value.firstOrNull { it.id == rId }
+                                val recipes by viewModel.suggestedRecipes.collectAsState()
+                                val matched = recipes.firstOrNull { it.id == rId }
                                 if (matched != null) {
                                     RecipeDetailScreen(
                                         viewModel = viewModel,
                                         recipe = matched,
-                                        onBack = { viewModel.navigateTo("dashboard") },
-                                        onStartCooking = {
+                                        onBack = { viewModel.navigateBackTo("dashboard") },
+                                        onStartCooking = { servings ->
+                                            activeCookingServings = servings
                                             viewModel.selectRecipe(matched)
                                             viewModel.navigateTo("guided_cooking")
+                                        },
+                                        onChat = {
+                                            viewModel.selectRecipe(matched)
+                                            viewModel.navigateTo("chat")
                                         }
                                     )
                                 } else {
@@ -174,7 +244,7 @@ class MainActivity : ComponentActivity() {
                             currentRoute == "chat" -> {
                                 ChatScreen(
                                     viewModel = viewModel,
-                                    onBack = { viewModel.navigateTo("recipes") }
+                                    onBack = { viewModel.navigateBackTo("recipes") }
                                 )
                             }
                             currentRoute == "shopping_list" -> {
@@ -183,19 +253,21 @@ class MainActivity : ComponentActivity() {
                             currentRoute == "settings" -> {
                                 SettingsScreen(
                                     viewModel = viewModel,
-                                    onNavigateBack = { viewModel.navigateTo("dashboard") }
+                                    onNavigateBack = { viewModel.navigateBackTo("dashboard") }
                                 )
                             }
                             currentRoute == "profile" -> {
                                 ProfileScreen(
                                     viewModel = viewModel,
-                                    onNavigateBack = { viewModel.navigateTo("dashboard") }
+                                    onNavigateBack = { viewModel.navigateBackTo("dashboard") }
                                 )
                             }
                             currentRoute == "guided_cooking" && activeRecipe != null -> {
                                 GuidedCookingScreen(
+                                    viewModel = viewModel,
                                     recipe = activeRecipe!!,
-                                    onBack = { viewModel.navigateTo("recipe_detail") }
+                                    servings = activeCookingServings.coerceAtLeast(1),
+                                    onBack = { viewModel.navigateBackTo("recipe_detail") }
                                 )
                             }
                         }

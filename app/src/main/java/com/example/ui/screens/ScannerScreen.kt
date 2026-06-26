@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,8 +29,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inventory2
-import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.LocalOffer
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -41,6 +42,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -72,8 +74,7 @@ import com.example.ui.viewmodel.ShelfLifeViewModel
 
 @Composable
 fun ScannerScreen(
-    viewModel: ShelfLifeViewModel,
-    onNavigateToAddManual: () -> Unit = {}
+    viewModel: ShelfLifeViewModel
 ) {
     val context = LocalContext.current
     val isDark = MaterialTheme.colorScheme.isDark
@@ -89,20 +90,6 @@ fun ScannerScreen(
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = "Scan product",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "Use the camera for packaged items, or enter a barcode manually when scanning is not available.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText
-            )
-        }
-
         ScannerLaunchPanel(
             isLoading = scannerUiState.isLoading,
             onScan = { viewModel.scanRealBarcode(context) }
@@ -112,7 +99,7 @@ fun ScannerScreen(
             ProductResultCard(
                 ingredient = ingredient,
                 barcode = scannerUiState.barcode,
-                onAdd = { viewModel.confirmScannedIngredient() },
+                onAdd = { editedIngredient -> viewModel.confirmScannedIngredient(editedIngredient) },
                 onScanAgain = { viewModel.resetScanner() }
             )
         }
@@ -124,6 +111,14 @@ fun ScannerScreen(
                 onClear = { viewModel.resetScanner() }
             )
         }
+
+        Text(
+            text = "OR",
+            style = MaterialTheme.typography.labelMedium,
+            color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else SoftGrayText,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        )
 
         ManualBarcodeCard(
             barcode = manualBarcode,
@@ -155,7 +150,7 @@ private fun ScannerLaunchPanel(
         shape = RoundedCornerShape(28.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .height(300.dp)
+            .height(320.dp)
             .clickable(enabled = !isLoading, onClick = onScan)
     ) {
         Box(
@@ -202,28 +197,19 @@ private fun ScannerLaunchPanel(
                         imageVector = Icons.Default.QrCodeScanner,
                         contentDescription = null,
                         tint = Color.White,
-                        modifier = Modifier.size(64.dp)
-                    )
-                    Text(
-                        text = "Open camera scanner",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "Center the barcode in the camera view. ShelfLife will identify it before adding anything.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.72f),
-                        textAlign = TextAlign.Center
+                        modifier = Modifier.size(78.dp)
                     )
                     Button(
                         onClick = onScan,
-                        colors = ButtonDefaults.buttonColors(containerColor = SageGreen),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF9DDEB4),
+                            contentColor = Color(0xFF123522)
+                        ),
                         shape = CircleShape
                     ) {
                         Icon(imageVector = Icons.Default.PhotoCamera, contentDescription = null)
                         Spacer(modifier = Modifier.size(8.dp))
-                        Text("Scan barcode", fontWeight = FontWeight.Bold)
+                        Text("Scan Barcode", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -235,9 +221,33 @@ private fun ScannerLaunchPanel(
 private fun ProductResultCard(
     ingredient: Ingredient,
     barcode: String?,
-    onAdd: () -> Unit,
+    onAdd: (Ingredient) -> Unit,
     onScanAgain: () -> Unit
 ) {
+    var isEditing by remember(ingredient) { mutableStateOf(false) }
+    var name by remember(ingredient) { mutableStateOf(ingredient.name) }
+    var category by remember(ingredient) { mutableStateOf(ingredient.category) }
+    var quantity by remember(ingredient) { mutableStateOf(ingredient.quantity.toString()) }
+    var unit by remember(ingredient) { mutableStateOf(ingredient.unit) }
+    var location by remember(ingredient) { mutableStateOf(ingredient.location) }
+    var expirationDate by remember(ingredient) { mutableStateOf(ingredient.expirationDate) }
+    var packageSize by remember(ingredient) { mutableStateOf(ingredient.packageSize) }
+    var brand by remember(ingredient) { mutableStateOf(ingredient.brand) }
+    var editedBarcode by remember(ingredient, barcode) { mutableStateOf(ingredient.barcode.ifBlank { barcode.orEmpty() }) }
+    var notes by remember(ingredient) { mutableStateOf(ingredient.notes) }
+    val editedIngredient = ingredient.copy(
+        name = name.trim().ifBlank { ingredient.name },
+        category = category.trim().ifBlank { ingredient.category },
+        quantity = quantity.toDoubleOrNull() ?: ingredient.quantity,
+        unit = unit.trim().ifBlank { ingredient.unit },
+        location = location.trim().ifBlank { ingredient.location },
+        expirationDate = expirationDate.trim(),
+        packageSize = packageSize.trim(),
+        brand = brand.trim(),
+        barcode = editedBarcode.trim(),
+        notes = notes.trim()
+    )
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
         shape = RoundedCornerShape(22.dp),
@@ -248,6 +258,7 @@ private fun ProductResultCard(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -270,32 +281,75 @@ private fun ProductResultCard(
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
                     )
                 }
+                Spacer(modifier = Modifier.weight(1f))
+                IconButton(onClick = { isEditing = !isEditing }) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit scanned product",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
             }
 
-            Text(
-                text = ingredient.name,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                fontWeight = FontWeight.Bold
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ProductChip(Icons.Default.LocalOffer, ingredient.category)
-                ProductChip(Icons.Default.Inventory2, "${ingredient.quantity} ${ingredient.unit}")
-            }
-            ProductChip(Icons.Default.Inventory2, "${ingredient.location} until ${ingredient.expirationDate}")
-            if (ingredient.notes.isNotBlank()) {
-                Text(
-                    text = ingredient.notes,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+            if (isEditing) {
+                ScanEditField("Product name", name, { name = it })
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ScanEditField("Category", category, { category = it }, Modifier.weight(1f))
+                    ScanEditField("Location", location, { location = it }, Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ScanEditField("Quantity", quantity, { quantity = it }, Modifier.weight(1f), KeyboardType.Decimal)
+                    ScanEditField("Unit", unit, { unit = it }, Modifier.weight(1f))
+                }
+                ScanEditField("Expiration / Use-By Date", expirationDate, { expirationDate = it }, placeholder = "YYYY-MM-DD")
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ScanEditField("Package size", packageSize, { packageSize = it }, Modifier.weight(1f))
+                    ScanEditField("Brand", brand, { brand = it }, Modifier.weight(1f))
+                }
+                ScanEditField("Barcode", editedBarcode, { editedBarcode = it.filter(Char::isDigit).take(32) }, keyboardType = KeyboardType.Number)
+                ScanEditField(
+                    label = "Nutrition / notes",
+                    value = notes,
+                    onValueChange = { notes = it },
+                    singleLine = false,
+                    minLines = 2
                 )
+            } else {
+                Text(
+                    text = ingredient.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ProductChip(Icons.Default.LocalOffer, ingredient.category)
+                    ProductChip(Icons.Default.Inventory2, "${ingredient.quantity} ${ingredient.unit}")
+                }
+                ProductChip(
+                    Icons.Default.Inventory2,
+                    if (ingredient.hasTrackedDate) {
+                        "${ingredient.location} · ${ingredient.dateLabel}: ${ingredient.expirationDate}"
+                    } else {
+                        "${ingredient.location} · No printed date"
+                    }
+                )
+                if (ingredient.notes.isNotBlank()) {
+                    Text(
+                        text = ingredient.notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                    )
+                }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
-                    onClick = onAdd,
-                    colors = ButtonDefaults.buttonColors(containerColor = SageGreen),
+                    onClick = { onAdd(editedIngredient) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (MaterialTheme.colorScheme.isDark) Color(0xFF9DDEB4) else SageGreen,
+                        contentColor = if (MaterialTheme.colorScheme.isDark) Color(0xFF123522) else Color.White
+                    ),
                     shape = CircleShape,
                     modifier = Modifier.weight(1f)
                 ) {
@@ -313,6 +367,36 @@ private fun ProductResultCard(
             }
         }
     }
+}
+
+@Composable
+private fun ScanEditField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    placeholder: String? = null,
+    singleLine: Boolean = true,
+    minLines: Int = 1
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        placeholder = placeholder?.let { { Text(it) } },
+        singleLine = singleLine,
+        minLines = minLines,
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.background,
+            unfocusedContainerColor = MaterialTheme.colorScheme.background,
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+        ),
+        shape = RoundedCornerShape(14.dp),
+        modifier = modifier.fillMaxWidth()
+    )
 }
 
 @Composable
@@ -397,35 +481,12 @@ private fun ManualBarcodeCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Keyboard,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Column {
-                    Text(
-                        text = "Enter barcode manually",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Useful for emulators, damaged labels, or when camera scanning is unavailable.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
             OutlinedTextField(
                 value = barcode,
                 onValueChange = { value ->
                     onBarcodeChange(value.filter { it.isDigit() }.take(32))
                 },
-                placeholder = { Text("Enter digits from the barcode, e.g. 5449000000996") },
+                placeholder = { Text("Enter barcode") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -449,6 +510,7 @@ private fun ManualBarcodeCard(
                 onClick = onLookup,
                 enabled = barcode.isNotBlank() && !isLoading,
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                contentPadding = PaddingValues(horizontal = 16.dp),
                 shape = CircleShape,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -459,7 +521,7 @@ private fun ManualBarcodeCard(
                 } else {
                     Icon(imageVector = Icons.Default.Search, contentDescription = null)
                     Spacer(modifier = Modifier.size(8.dp))
-                    Text("Lookup product", fontWeight = FontWeight.Bold)
+                    Text("Search Product", fontWeight = FontWeight.Bold)
                 }
             }
         }
